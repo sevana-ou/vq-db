@@ -381,7 +381,7 @@ func TestSevanaHiddenForEngineWithoutPvqa(t *testing.T) {
 			t.Fatalf("%s: code %d", path, code)
 		}
 		// Labels only: the Copy JSON / Markdown payloads carry the API's fields.
-		for _, bad := range []string{"Sevana MOS", "Sevana good", "Sevana Rfactor", "PVQA coverage", "PVQA instances", "Detectors report", "Impairments", "sevana_mos &gt;"} {
+		for _, bad := range []string{"Sevana MOS", "Sevana good", "Sevana Rfactor", "PVQA coverage", "PVQA instances", "Detectors report", "Impairments", "sevana_mos &gt;", "Avg R-factor", "Avg duration"} {
 			if strings.Contains(body, bad) {
 				t.Errorf("%s shows %q for an engine without PVQA", path, bad)
 			}
