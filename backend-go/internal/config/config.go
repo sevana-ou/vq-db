@@ -47,6 +47,10 @@ type Config struct {
 	MaxStreams            int
 	GoodMosThreshold      float64
 	SilenceRatioThreshold float64
+	// SevanaMos says whether the dashboard shows Sevana MOS (PVQA) figures:
+	// "auto" (default: hide them when vq-core reports a build without PVQA),
+	// "on" or "off".
+	SevanaMos string
 
 	// Database
 	DBEngine         string
@@ -90,6 +94,7 @@ func defaults() Config {
 		MaxStreams:            50,
 		GoodMosThreshold:      3.6,
 		SilenceRatioThreshold: 0.8,
+		SevanaMos:             "auto",
 		LogLevel:              "info",
 	}
 }
@@ -194,6 +199,18 @@ func asString(v any) string {
 	return fmt.Sprintf("%v", v)
 }
 
+// sevanaMosMode normalises dashboard.sevana-mos to "auto", "on" or "off".
+// YAML booleans and yes/no work too; anything else means "auto".
+func sevanaMosMode(v any) string {
+	switch strings.ToLower(strings.TrimSpace(asString(v))) {
+	case "true", "yes", "on", "show":
+		return "on"
+	case "false", "no", "off", "hide":
+		return "off"
+	}
+	return "auto"
+}
+
 func asBool(v any, def bool) bool {
 	switch t := v.(type) {
 	case nil:
@@ -263,6 +280,7 @@ func parse(doc any) *Config {
 	cfg.MaxStreams = asInt(nestedGet(doc, "dashboard", "max-streams"), 50)
 	cfg.GoodMosThreshold = asFloat(nestedGet(doc, "dashboard", "good-mos-threshold"), 3.6)
 	cfg.SilenceRatioThreshold = asFloat(nestedGet(doc, "dashboard", "silence-ratio-threshold"), 0.8)
+	cfg.SevanaMos = sevanaMosMode(nestedGet(doc, "dashboard", "sevana-mos"))
 
 	cfg.DBEngine = asString(nestedGet(doc, "database", "engine"))
 	cfg.DBConnection = asString(nestedGet(doc, "database", "connection"))

@@ -125,6 +125,7 @@ func run() int {
 		GoodMosThreshold:      cfg.GoodMosThreshold,
 		SilenceRatioThreshold: cfg.SilenceRatioThreshold,
 		MaxStreams:            cfg.MaxStreams,
+		SevanaMos:             cfg.SevanaMos,
 		Version:               version,
 		Registry:              registry,
 		Snapshot:              snapshot,

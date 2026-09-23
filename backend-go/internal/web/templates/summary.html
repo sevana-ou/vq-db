@@ -36,16 +36,16 @@
     <span class="pill-badge" title="Threshold">{{.Threshold}}</span>
   </div>
   <div class="metric"><span class="metric-label">Streams</span><span class="stat">{{.StreamCount}}</span></div>
-  {{template "good-rate" .Sevana}}
+  {{if .ShowSevana}}{{template "good-rate" .Sevana}}{{end}}
   {{template "good-rate" .Network}}
   <hr>
   <dl class="kv">
-    <dt>Avg Sevana MOS</dt><dd>{{template "mos-pill" .AvgSevana}}</dd>
+    {{if .ShowSevana}}<dt>Avg Sevana MOS</dt><dd>{{template "mos-pill" .AvgSevana}}</dd>{{end}}
     <dt>Avg Network MOS</dt><dd>{{template "mos-pill" .AvgNetwork}}</dd>
     <dt>Avg R-factor</dt><dd>{{.AvgRfactor}}</dd>
     <dt>Avg duration (s)</dt><dd>{{.AvgDuration}}</dd>
   </dl>
-  <p class="muted small">{{.CoverageText}}</p>
+  {{if .ShowSevana}}<p class="muted small">{{.CoverageText}}</p>{{end}}
 </div>
 {{end}}
 

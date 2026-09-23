@@ -1,5 +1,5 @@
 {{define "content"}}
-{{$base := .Base}}
+{{$base := .Base}}{{$sev := .Sevana}}
 {{with .Data}}
 {{if .Error}}
 <p><a href="{{$base}}/ui/streams">← Streams</a></p>
@@ -19,7 +19,7 @@
     <dt>Source</dt><dd class="mono">{{$d.source}}</dd>
     <dt>Destination</dt><dd class="mono">{{$d.destination}}</dd>
     <dt>SSRC</dt><dd class="mono">{{$d.ssrc}}</dd>
-    <dt>Sevana MOS</dt><dd>{{template "mos-pill" (mos $d.sevana_mos true)}}</dd>
+    {{if $sev}}<dt>Sevana MOS</dt><dd>{{template "mos-pill" (mos $d.sevana_mos true)}}</dd>{{end}}
     <dt>Network MOS</dt><dd>{{template "mos-pill" (mos $d.network_mos false)}}</dd>
     <dt>Jitter (ms)</dt><dd>{{fmtF2 $d.jitter}}</dd>
     <dt>RTT delay (ms)</dt><dd>{{raw $d.rtt_delay}}</dd>
@@ -30,14 +30,14 @@
     <dt>DTX frames (silence / comfort-noise / total)</dt><dd>{{.DtxText}}</dd>
     <dt>Silence</dt><dd>{{.SilencePct}}{{if .SilenceSuspected}} <span class="chip warning">🔇 Silence suspected</span>{{end}}</dd>
     {{end}}
-    <dt>Sevana Rfactor</dt><dd>{{.Rfactor}}</dd>
+    {{if $sev}}<dt>Sevana Rfactor</dt><dd>{{.Rfactor}}</dd>{{end}}
     <dt>SIP callid</dt><dd>{{if $d.sip_callid}}<a href="{{$base}}/ui/sip-call/{{queryEsc $d.sip_callid}}">{{$d.sip_callid}} ↗</a>{{end}}</dd>
     <dt>SIP destination</dt><dd>{{$d.sip_dst}}</dd>
     <dt>SIP source</dt><dd>{{$d.sip_src}}</dd>
   </dl>
 </div>
 
-{{if .HasDetectors}}
+{{if and $sev .HasDetectors}}
 <div class="card section">
   <h2>Impairments summary</h2>
   {{if .Detectors}}
@@ -65,7 +65,7 @@
   <h2>Stream chunks</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Interval of chunk</th><th>Sevana MOS</th><th>Network MOS</th><th></th></tr></thead>
+      <thead><tr><th>Interval of chunk</th>{{if $sev}}<th>Sevana MOS</th>{{end}}<th>Network MOS</th><th></th></tr></thead>
       <tbody>
         {{$id := .LinkID}}
         {{range .Chunks}}
@@ -73,7 +73,7 @@
           <td><a href="{{$base}}/ui/chunk/{{queryEsc $id}}/{{.TS}}"
                  hx-get="{{$base}}/ui/chunk/{{queryEsc $id}}/{{.TS}}"
                  hx-target="#chunk-inline" hx-swap="innerHTML show:#chunk-inline:top">{{.Label}}</a></td>
-          <td>{{template "mos-pill" .SevanaMos}}</td>
+          {{if $sev}}<td>{{template "mos-pill" .SevanaMos}}</td>{{end}}
           <td>{{template "mos-pill" .NetworkMos}}</td>
           <td class="row-actions">
             <button type="button" class="small-btn" data-copy-text="{{.CopyJSON}}" title="Copy JSON">⧉</button>

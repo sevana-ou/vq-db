@@ -52,6 +52,27 @@ func (a *App) RootRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, basePrefix(r)+"/ui/summary", http.StatusFound)
 }
 
+// showSevana reports whether the dashboard shows Sevana MOS (PVQA) figures:
+// its MOS and R-factor, the detector reports and the PVQA counters. "auto"
+// hides them once the connected vq-core says it was built without PVQA (its
+// version ends in "network analysis only (no PVQA)"), and shows them
+// otherwise, including before vq-core has reported. The JSON API is not
+// affected.
+func (a *App) showSevana() bool {
+	switch a.deps.SevanaMos {
+	case "on":
+		return true
+	case "off":
+		return false
+	}
+	if a.deps.Snapshot != nil {
+		if s, ok := a.deps.Snapshot.Get(); ok {
+			return !strings.Contains(s.Version, "no PVQA")
+		}
+	}
+	return true
+}
+
 func (a *App) redirectToSummary(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, basePrefix(r)+"/ui/summary", http.StatusFound)
 }

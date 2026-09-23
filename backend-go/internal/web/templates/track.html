@@ -10,8 +10,8 @@
     <h2>Tracked addresses{{if .Patterns}} : {{.Count}}{{end}}</h2>
   </div>
   <p class="muted small">Calls whose caller or callee matches a pattern (case-insensitive substring,
-  e.g. &quot;alice&quot; or &quot;1001&quot;) get full audio + Sevana MOS analysis. Everything else stays
-  network-MOS only.</p>
+  e.g. &quot;alice&quot; or &quot;1001&quot;) get {{if $.Sevana}}full audio + Sevana MOS analysis. Everything else stays
+  network-MOS only.{{else}}their audio recorded, where vq-core is set to record tracked calls.{{end}}</p>
 
   {{if .Unavailable}}
   <p class="muted empty">vq-core control socket unavailable.</p>

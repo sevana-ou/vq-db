@@ -26,6 +26,7 @@ type pageData struct {
 	Nav     string // active nav item key
 	Title   string
 	Version string
+	Sevana  bool // show Sevana MOS figures (App.showSevana)
 	Data    any
 }
 
@@ -58,6 +59,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, page string, data p
 		data.Query = "?" + q
 	}
 	data.Version = a.deps.Version
+	data.Sevana = a.showSevana()
 
 	tpl := templates[page]
 	block := "layout.html"

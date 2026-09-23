@@ -1,7 +1,7 @@
 # Deploying vq-db
 
 > The vq-db backend is now the Go implementation in [`../backend-go`](../backend-go)
-> (the Python backend was removed in the `refactor-golang` migration). The web
+> (it replaced the earlier Python backend, which is not part of this repo). The web
 > dashboard is embedded in the Go binary (`internal/web`, htmx) and served at
 > `/ui/`. This directory holds the backend build/deploy scripts (`build.py`,
 > `build_bundle.py`, `install_bundle.sh`, `run_test.sh`, the systemd unit and
@@ -35,8 +35,7 @@ on :9156). Full details: [`../backend-go/README.md`](../backend-go/README.md).
 The dashboard is server-rendered by the backend itself
 (`backend-go/internal/web`: Go templates + htmx, all assets embedded via
 `go:embed`) — there is no separate frontend build or deploy step. (The old
-Flutter app and its `frontend_*.py` helpers were removed from the repo;
-recover them from git history if ever needed.)
+Flutter app and its `frontend_*.py` helpers are not part of this repo.)
 
 `nginx-beta.conf` is a sample reverse-proxy config (sets `X-Forwarded-Prefix`
 for sub-path mounting, which the backend honours when generating UI links and

@@ -35,9 +35,10 @@ type histView struct {
 	AvgRfactor   string
 	AvgDuration  string
 	CoverageText string
+	ShowSevana   bool
 }
 
-func buildHistView(title string, w map[string]any, threshold float64) histView {
+func buildHistView(title string, w map[string]any, threshold float64, sevana bool) histView {
 	streams := toI64(w["stream_count"])
 	goodSevana := toI64(w["good_sevana_count"])
 	goodNetwork := toI64(w["good_network_count"])
@@ -74,11 +75,13 @@ func buildHistView(title string, w map[string]any, threshold float64) histView {
 		AvgRfactor:   fmtFixed(2)(avg["rfactor"]),
 		AvgDuration:  fmtFixed(1)(avg["duration"]),
 		CoverageText: "PVQA coverage: " + fmtPct(coverage) + " (" + fmtInt(withSevana) + " / " + fmtInt(streams) + ")",
+		ShowSevana:   sevana,
 	}
 }
 
 func (a *App) summaryPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]any{}
+	sevana := a.showSevana()
 	if a.deps.Snapshot != nil {
 		if s, ok := a.deps.Snapshot.Get(); ok {
 			core := api.CoreStatsToJSON(s)
@@ -98,10 +101,10 @@ func (a *App) summaryPage(w http.ResponseWriter, r *http.Request) {
 		data["SessionFinished"] = "0"
 	}
 	if h1, err := api.FindWidgetStats(a.deps.DB, 3600, a.deps.GoodMosThreshold, 0); err == nil {
-		data["H1"] = buildHistView("Last 1 hour", api.WidgetStatsToJSON(h1), a.deps.GoodMosThreshold)
+		data["H1"] = buildHistView("Last 1 hour", api.WidgetStatsToJSON(h1), a.deps.GoodMosThreshold, sevana)
 	}
 	if h24, err := api.FindWidgetStats(a.deps.DB, 86400, a.deps.GoodMosThreshold, 0); err == nil {
-		data["H24"] = buildHistView("Last 24 hours", api.WidgetStatsToJSON(h24), a.deps.GoodMosThreshold)
+		data["H24"] = buildHistView("Last 24 hours", api.WidgetStatsToJSON(h24), a.deps.GoodMosThreshold, sevana)
 	}
 	a.render(w, r, "summary.html", pageData{Nav: "summary", Title: "Summary", Data: data})
 }
@@ -119,7 +122,7 @@ func (a *App) corePage(w http.ResponseWriter, r *http.Request) {
 	if a.deps.Snapshot != nil {
 		if s, ok := a.deps.Snapshot.Get(); ok {
 			data["Core"] = true
-			data["CoreRows"] = coreDetailRows(s)
+			data["CoreRows"] = coreDetailRows(s, a.showSevana())
 			core := api.CoreStatsToJSON(s)
 			if caps, ok := core["capturers"].([]map[string]any); ok {
 				data["Capturers"] = caps
@@ -134,7 +137,7 @@ func (a *App) corePage(w http.ResponseWriter, r *http.Request) {
 // "a / b" rows, and the CPU and tcmalloc rows appear only when vq-core actually
 // reports them. Version, uptime and server time are kept as identity rows (the
 // loadmonitor shows them in its header, not the metric list).
-func coreDetailRows(s model.InstanceStatistics) []coreRow {
+func coreDetailRows(s model.InstanceStatistics, sevana bool) []coreRow {
 	rows := []coreRow{
 		{"Version", s.Version},
 		{"Uptime", fmtUptime(s.UptimeSeconds)},
@@ -146,7 +149,11 @@ func coreDetailRows(s model.InstanceStatistics) []coreRow {
 		coreRow{"Live decoders / calls", fmt.Sprintf("%s / %s", fmtInt(s.ActiveDecoderCounter), fmtInt(s.SipCallCounter))},
 		coreRow{"Audio / active decoders", fmt.Sprintf("%s / %s", fmtInt(s.ActiveAudioDecoderCounter), fmtInt(s.ActiveDecoderCounter))},
 		coreRow{"Total decoders", fmtInt(s.TotalDecoderCounter)},
-		coreRow{"PVQA instances / processed", fmt.Sprintf("%s / %ss", fmtInt(s.PvqaInstanceCounter), fmtInt(s.PvqaProcessedSeconds))},
+	)
+	if sevana {
+		rows = append(rows, coreRow{"PVQA instances / processed", fmt.Sprintf("%s / %ss", fmtInt(s.PvqaInstanceCounter), fmtInt(s.PvqaProcessedSeconds))})
+	}
+	rows = append(rows,
 		coreRow{"reSIProcate msgs (all / sip)", fmt.Sprintf("%s / %s", fmtInt(s.ResipMessageCounter), fmtInt(s.ResipSipMessageCounter))},
 	)
 	// CPU: only when vq-core reports process CPU (loadmonitor condition).
@@ -179,6 +186,7 @@ func (a *App) streamsPage(w http.ResponseWriter, r *http.Request) {
 
 	// "New since page open" baseline for the active card. Links drop it, the
 	// poll URL keeps it, so any user action resets the baseline.
+	sevana := a.showSevana()
 	since := int64(intParam(q.Get("a_since"), 0))
 	if since == 0 {
 		since = time.Now().Unix()
@@ -199,7 +207,7 @@ func (a *App) streamsPage(w http.ResponseWriter, r *http.Request) {
 	sinceFilter.DateInterval = &filter.DateInterval{StartSeconds: since, EndSeconds: farFutureSeconds}
 	_, newCount := stats.PaginateActive(records, sinceFilter)
 
-	activeCard := buildCardView(base, aq, "a", fq, "f", "Active Streams", activeRows, totalActive, "")
+	activeCard := buildCardView(base, aq, "a", fq, "f", "Active Streams", activeRows, totalActive, "", sevana)
 	activeCard.NewCount = newCount
 
 	// Finished card.
@@ -216,7 +224,7 @@ func (a *App) streamsPage(w http.ResponseWriter, r *http.Request) {
 			finishedRows = append(finishedRows, api.FinishedStreamRowToJSON(row, a.deps.SilenceRatioThreshold))
 		}
 	}
-	finishedCard := buildCardView(base, fq, "f", aq, "a", "Finished Streams", finishedRows, totalFinished, finishedErr)
+	finishedCard := buildCardView(base, fq, "f", aq, "a", "Finished Streams", finishedRows, totalFinished, finishedErr, sevana)
 
 	// The poll URL carries the baseline; both cards poll the same URL and
 	// each swaps only its own block.

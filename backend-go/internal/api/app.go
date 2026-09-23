@@ -50,6 +50,7 @@ type Deps struct {
 	GoodMosThreshold      float64
 	SilenceRatioThreshold float64
 	MaxStreams            int
+	SevanaMos             string // dashboard: "auto", "on" or "off" (see config)
 	Version               string
 	Registry              Registry   // may be nil
 	Snapshot              Snapshot   // may be nil

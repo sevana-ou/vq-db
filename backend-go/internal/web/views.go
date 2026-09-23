@@ -114,6 +114,7 @@ type cardView struct {
 	FilterName  string // filter input name
 	FilterValue string
 	Hidden      []hiddenField // hidden inputs for the filter form
+	Sevana      bool          // show the Sevana MOS column
 }
 
 var streamColumns = []struct {
@@ -151,11 +152,14 @@ func streamsURL(base string, own streamsQuery, prefix string, other streamsQuery
 
 // buildCardView assembles sort-header URLs, the pager and the filter form for
 // one card.
-func buildCardView(base string, own streamsQuery, prefix string, other streamsQuery, otherPrefix, title string, rows []map[string]any, total int, cardErr string) cardView {
+func buildCardView(base string, own streamsQuery, prefix string, other streamsQuery, otherPrefix, title string, rows []map[string]any, total int, cardErr string, sevana bool) cardView {
 	mk := func(q streamsQuery) string { return streamsURL(base, q, prefix, other, otherPrefix) }
 
 	cols := make([]sortCol, 0, len(streamColumns))
 	for _, c := range streamColumns {
+		if c.Field == "sevana_mos" && !sevana {
+			continue
+		}
 		col := sortCol{Label: c.Label, Num: c.Num}
 		if c.Field != "" {
 			q := own
@@ -212,6 +216,7 @@ func buildCardView(base string, own streamsQuery, prefix string, other streamsQu
 		FilterName:  prefix + "_q",
 		FilterValue: own.Filter,
 		Hidden:      hidden,
+		Sevana:      sevana,
 	}
 }
 

@@ -15,8 +15,7 @@ database, and serves a REST API plus an embedded web dashboard:
   backend is the **behavioral reference** the port was matched against — its
   reverse-engineering and migration notes live in `docs/`. The dashboard UI
   (server-rendered Go templates + htmx) lives in `backend-go/internal/web`;
-  the earlier Flutter Web dashboard it replaced has been deleted from the
-  repo (see git history before 2026-07 if you need it).
+  the earlier Flutter Web dashboard it replaced is not part of this repo.
 - `docs/` — `vq_db_api.md` is the authoritative REST API reference (endpoints,
   filter grammar, response shapes); read it before touching any API surface.
   `FILTER.md` (filter mini-language), `STATS.md` (`/stats` endpoint), and
@@ -82,7 +81,7 @@ change API behavior there, presentation in `internal/web`. `go test
 ./internal/web/` covers rendering; there is no separate frontend build.
 
 The Flutter app this UI replaced (and its `scripts/frontend_*.py` helpers)
-has been removed from the repo; recover it from git history if ever needed.
+is not part of this repo.
 
 ## Backend architecture
 

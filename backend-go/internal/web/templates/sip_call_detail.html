@@ -27,7 +27,7 @@
     <table>
       <thead><tr>
         <th>Status</th><th>Time</th><th>Source</th><th>Destination</th>
-        <th>Sevana MOS</th><th>Network MOS</th><th>Details</th>
+        {{if $.Sevana}}<th>Sevana MOS</th>{{end}}<th>Network MOS</th><th>Details</th>
       </tr></thead>
       <tbody>
         {{range .Streams}}
@@ -36,7 +36,7 @@
           <td>{{.start_time}}</td>
           <td class="mono">{{.source}}</td>
           <td class="mono">{{.destination}}</td>
-          <td>{{template "mos-pill" (mos .sevana_mos true)}}</td>
+          {{if $.Sevana}}<td>{{template "mos-pill" (mos .sevana_mos true)}}</td>{{end}}
           <td>{{template "mos-pill" (mos .network_mos false)}}</td>
           <td>{{if .stream_id}}<a href="{{$base}}/ui/stream/{{queryEsc .stream_id}}" title="Details">↗</a>{{end}}</td>
         </tr>

@@ -14,7 +14,7 @@
   <form class="toolbar" method="get" action="{{.P.Base}}/ui/streams">
     {{range .C.Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
     <input class="grow" type="text" name="{{.C.FilterName}}" value="{{.C.FilterValue}}"
-           placeholder="Filter (e.g. sevana_mos &gt; 3 &amp;&amp; jitter &lt; 50)">
+           placeholder="Filter (e.g. {{if .C.Sevana}}sevana_mos &gt; 3{{else}}network_mos &gt; 3{{end}} &amp;&amp; jitter &lt; 50)">
     <button type="submit" class="primary">Apply</button>
     {{if .C.FilterValue}}<a class="btn" href="{{.P.Base}}/ui/streams">Reset</a>{{end}}
   </form>
@@ -44,7 +44,7 @@
       {{end}}
     </tr></thead>
     <tbody>
-      {{$p := .P}}{{$off := .C.Q.Offset}}
+      {{$p := .P}}{{$off := .C.Q.Offset}}{{$sev := .C.Sevana}}
       {{range $i, $row := .C.Rows}}
       <tr>
         <td class="num muted">{{add $off (add $i 1)}}</td>
@@ -52,7 +52,7 @@
         <td class="mono">{{$row.source}}</td>
         <td class="mono">{{$row.destination}}</td>
         <td class="num">{{raw $row.duration}}</td>
-        <td>{{template "mos-pill" (mos $row.sevana_mos true)}}</td>
+        {{if $sev}}<td>{{template "mos-pill" (mos $row.sevana_mos true)}}</td>{{end}}
         <td>{{template "mos-pill" (mos $row.network_mos false)}}
             {{if $row.silence_suspected}}<span class="chip warning icon" title="Silence suspected {{pct0 $row.silence_ratio}}">🔇</span>{{end}}</td>
         <td class="num">{{raw $row.jitter}}</td>

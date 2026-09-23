@@ -24,7 +24,7 @@
     <dt>Source</dt><dd class="mono">{{$d.source}}</dd>
     <dt>Destination</dt><dd class="mono">{{$d.destination}}</dd>
     <dt>SSRC</dt><dd class="mono">{{$d.ssrc}}</dd>
-    <dt>Sevana MOS</dt><dd>{{template "mos-pill" (mos $d.sevana_mos true)}}</dd>
+    {{if $.Sevana}}<dt>Sevana MOS</dt><dd>{{template "mos-pill" (mos $d.sevana_mos true)}}</dd>{{end}}
     <dt>Network MOS</dt><dd>{{template "mos-pill" (mos $d.network_mos false)}}</dd>
     <dt>Jitter (ms)</dt><dd>{{fmtF2 $d.jitter}}</dd>
     <dt>RTT delay (ms)</dt><dd>{{raw $d.rtt_delay}}</dd>
@@ -32,9 +32,10 @@
     <dt>RTP packets</dt><dd>{{raw $d.rtp_packet_counter}}</dd>
     <dt>Lost packets</dt><dd>{{raw $d.lost_packet_counter}}</dd>
     <dt>Illegal packet counter</dt><dd>{{raw $d.illegal_packet_counter}}</dd>
-    <dt>Sevana Rfactor</dt><dd>{{raw $d.sevana_rfactor}}</dd>
+    {{if $.Sevana}}<dt>Sevana Rfactor</dt><dd>{{raw $d.sevana_rfactor}}</dd>{{end}}
   </dl>
 
+  {{if $.Sevana}}
   <h3>Detectors report</h3>
   {{if .Detectors.Header}}
   <div class="table-wrap">
@@ -46,6 +47,7 @@
     </table>
   </div>
   {{else}}<p class="muted">No data</p>{{end}}
+  {{end}}
 </div>
 {{end}}
 {{end}}
