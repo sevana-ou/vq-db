@@ -1,0 +1,354 @@
+syntax="proto3";
+
+package messages;
+
+message IpAddress
+{
+    enum Family
+    {
+        IPv4 = 0;
+        IPv6 = 1;
+    }
+    Family family                       = 1;
+    bool relayed                        = 2;
+    bytes ip                            = 3;
+    uint32 port                         = 4;
+}
+
+// An IPsec ESP security association was bound in vq-core's key store. Published
+// only when server.esp.publish-sa-events is on; key bytes present only under
+// publish-keys. For coverage monitoring.
+message EspSaEvent {
+    repeated uint32 spis        = 1;   // SPIs bound (one per SA)
+    IpAddress dst               = 2;   // SA destination (owner of the SPI)
+    string enc_alg              = 3;
+    string auth_alg             = 4;
+    uint32 source               = 5;   // 0 = harvested, 1 = static file
+    bytes enc_key               = 6;   // present only under publish-keys
+    bytes auth_key              = 7;   // present only under publish-keys
+}
+
+message StreamId {
+    IpAddress src                       = 1;
+    IpAddress dst                       = 2;
+    uint32 ssrc                         = 3;
+    string uuid                         = 4;
+}
+
+// Aggregate of a single metric tracked over a stream's lifetime. Reused for
+// jitter, RTT and both MOS scores, all of which carry the same shape. Left at
+// proto3 defaults (all zero) when the underlying metric was never initialized.
+message MetricStats {
+    float min                           = 1;
+    float max                           = 2;
+    float avg                           = 3;
+    float current                       = 4;   // last / instantaneous value
+}
+
+message CaptureStats {
+    string device                        = 1;
+    uint64 total_packet_counter          = 2;
+    uint64 rtp_packet_counter            = 3;
+    uint64 sip_packet_counter            = 4;
+    uint64 truncated_packet_counter      = 5;
+    string src_port_range                = 6;
+    string dst_port_range                = 7;
+    // NIC-level capture-loss counters. Populated by the DPDK capturer from
+    // rte_eth_stats (via pcpp DpdkDevice::getStatistics); 0 on the libpcap/HEP paths.
+    uint64 dropped_hw_packet_counter     = 8;   // dropped by NIC HW: RX queues full
+    uint64 erroneous_packet_counter      = 9;   // erroneous packets (ierrors)
+    uint64 mbuf_alloc_failed_counter     = 10;  // RX mbuf allocation failures
+}
+
+message Stream {
+    StreamId stream_id                  = 1;
+
+    // Packet counters
+    uint64 rtp_packet_counter           = 2;
+    uint64 rtp_illegal_packet_counter   = 3;
+    uint64 rtp_lost_packet_counter      = 4;
+    uint64 rtp_duplicated_counter       = 5;
+
+    // Codec
+    string codecname                    = 6;
+
+    // Start & finish UNIX timestamp (milliseconds) of THIS report's window:
+    //   * interval (chunk) report  -> [start_timestamp, finish_timestamp] is the chunk
+    //   * final report (StreamFinish.report) -> covers the whole stream
+    // The window duration is finish_timestamp - start_timestamp; there is no
+    // separate duration field (it was always derivable from these two).
+    uint64 start_timestamp              = 7;
+    uint64 finish_timestamp             = 8;
+
+    // Stream start UNIX timestamp (milliseconds): the time of the first media
+    // packet of the whole stream. Constant across every interval report for a
+    // given stream (unlike start_timestamp, which advances per chunk). For the
+    // final report it equals start_timestamp.
+    uint64 start_timestamp_stream       = 20;
+
+    // Duration of decoded audio
+    float duration_audio                = 9;
+
+    // Can be path to decoded audio file
+    string user_data                    = 10;
+
+    // Sevana R-factor
+    float sevana_rfactor                = 11;
+
+    // CSV interval report
+    string interval_report              = 12;
+
+    // SIP correlation for the stream, unset if the call was not seen on SIP.
+    message SipInfo
+    {
+        string call_id = 1;   // SIP Call-ID
+        string peer1   = 2;   // first party AOR  (QualityReport mSip.mPeerA)
+        string peer2   = 3;   // second party AOR (QualityReport mSip.mPeerB)
+    }
+    SipInfo sip                         = 13;
+
+    message EchoPeak
+    {
+        float time     = 1;
+        float level    = 2;
+        float length   = 3;
+    }
+    repeated EchoPeak echolist          = 14;
+
+    // AMR-NB/WB and EVS frame statistics, derived from the RTP payload header
+    // without decoding. Populated even for network-MOS-only streams; stays at
+    // proto3 defaults (unset) for SRTP and non-AMR/EVS codecs.
+    message DtxInfo
+    {
+        uint64 count_sid    = 1;   // SID / comfort-noise frames
+        uint64 count_dtx    = 2;   // NO_DATA frames (DTX silence, nothing sent)
+        uint64 count_total  = 3;   // total AMR/EVS frames inspected (any class)
+    }
+    DtxInfo dtx_info                    = 15;
+
+    // Aggregated metrics (min/max/avg/current). Jitter and RTT are expressed in
+    // milliseconds; the two MOS scores are on the usual 1..5 scale.
+    MetricStats jitter                  = 16;
+    MetricStats rtt                     = 17;
+    MetricStats mos_network             = 18;
+    MetricStats mos_sevana              = 19;
+}
+
+message StreamStart {
+    StreamId stream_id                  = 1;
+}
+
+message StreamFinish {
+    StreamId stream_id                  = 1;
+    Stream report                       = 2;
+}
+
+message StreamGhost {
+    StreamId stream_id                  = 1;
+
+    // RTP packets seen for this flow before it was dropped as a ghost. A ghost
+    // is a sub-threshold stream (count < RTP_STREAM_DETECT_LIMIT) that never
+    // crossed into full reporting, so this is the total number of packets that
+    // were ever detected for it.
+    uint64 packet_counter               = 2;
+}
+
+// Decoded audio for a stream, delivered in-band so subscribers do not need
+// access to vq-core's filesystem. Emitted only when the "publish-audio" option
+// is enabled; one message accompanies each interval/final Stream report that
+// produced audio. The payload is a self-contained WAV file (canonical PCM16
+// header + samples), so subscribers can save or play it without extra metadata.
+message StreamAudio {
+    StreamId stream_id                  = 1;
+    bytes    wav                        = 2;   // complete WAV (header + PCM16 mono)
+    uint64   start_timestamp            = 3;   // UNIX timestamp (ms) of this chunk
+    uint64   finish_timestamp           = 4;   // UNIX timestamp (ms) of this chunk
+}
+
+message InstanceStatistics {
+    string id                       = 1;
+    string name                     = 2;
+    string server_time              = 3;
+    uint64 pvqa_instance_counter    = 4;
+    uint64 pvqa_processed_seconds   = 5;
+    uint64 uptime_seconds           = 6;
+    string version                  = 7;
+    uint64 active_decoder_counter   = 8;   // live StreamDecoder objects right now
+    uint64 total_decoder_counter    = 9;   // StreamDecoders created since startup
+
+    // Streams currently doing audio decode + PVQA right now (subset of
+    // active_decoder_counter). Reflects how full the audio set is — the SIP track
+    // list and/or the count-based max-streams-audio cap. 0 when no stream is being
+    // decoded (the network-MOS-only default).
+    uint64 active_audio_decoder_counter = 24;
+
+    repeated CaptureStats capturers = 10;
+
+    // Live SipManager Call objects right now. Grows with call volume and only
+    // shrinks as calls are garbage-collected; a value that keeps climbing while
+    // active_decoder_counter stays flat indicates Call objects are not being
+    // released (e.g. calls that never received a BYE).
+    uint64 sip_call_counter         = 11;
+
+    // Live reSIProcate object counts (leak indicators). resip_message_counter
+    // covers every resip::Message-derived object; resip_sip_message_counter is
+    // the SIP-specific subset. A value that keeps climbing flags leaked parsed
+    // messages (e.g. at the SipManager clone() sites).
+    uint64 resip_message_counter     = 12;
+    uint64 resip_sip_message_counter = 13;
+
+    // Allocator (tcmalloc) memory figures, 0 when not built against tcmalloc.
+    // mem_allocated_bytes is live application usage; mem_heap_size is total
+    // mapped from the OS; mem_pageheap_free_bytes is free-but-mapped memory the
+    // allocator retains (the reclaimable gap that explains high RSS without a
+    // leak). RSS is roughly mem_heap_size minus what has been returned to the OS.
+    uint64 mem_allocated_bytes        = 14;
+    uint64 mem_heap_size              = 15;
+    uint64 mem_pageheap_free_bytes    = 16;
+
+    // Allocator load (tcmalloc malloc/free hooks). mem_alloc_count /
+    // mem_free_count are cumulative since startup; mem_allocs_per_sec /
+    // mem_frees_per_sec are the per-second rates over the last report interval.
+    // All 0 unless allocation tracking is enabled (track-allocations) on a
+    // tcmalloc build. High allocs/sec with allocs ~= frees is healthy churn;
+    // a persistent allocs > frees gap is the live-object growth that drives RSS.
+    uint64 mem_alloc_count            = 17;
+    uint64 mem_free_count             = 18;
+    double mem_allocs_per_sec         = 19;
+    double mem_frees_per_sec          = 20;
+
+    // Process CPU usage (whole process, all threads), from getrusage(RUSAGE_SELF).
+    // cpu_user_seconds / cpu_system_seconds are cumulative CPU time consumed since
+    // startup (user space vs kernel on the process's behalf). cpu_usage_percent is
+    // the busy fraction over the last report interval expressed top-style as a
+    // percentage of a SINGLE core, so it can exceed 100 on a multithreaded load
+    // (e.g. 350 means ~3.5 cores busy). Divide by the core count for a 0-100
+    // machine-wide figure. 0 on the first report (no prior interval to diff).
+    double cpu_user_seconds           = 21;
+    double cpu_system_seconds         = 22;
+    double cpu_usage_percent          = 23;
+}
+
+// Direction of a SIP message relative to the dialog's two parties.
+enum SipDirection {
+    SIP_DIR_UNKNOWN          = 0;
+    SIP_DIR_CALLER_TO_CALLEE = 1;   // TransactionFlow::C2A
+    SIP_DIR_CALLEE_TO_CALLER = 2;   // TransactionFlow::A2C
+}
+
+// One party of a SIP dialog, as seen in signalling (maps to SipManager::Call::Peer).
+message SipPeer {
+    string aor                       = 1;   // From/To AOR, e.g. sip:alice@example.com
+    string user_agent                = 2;   // User-Agent / Server header if present
+    repeated IpAddress rtp_addresses = 3;   // media addresses advertised in SDP (c=/m=)
+    string codecs                    = 4;   // resolved codec settings, one line (cf. Stream.codecname)
+    uint32 ssrc                      = 5;   // SSRC this peer is expected to send (0 if unknown)
+}
+
+// All timestamp fields below are UNIX timestamps in MILLISECONDS since epoch,
+// matching Stream.start_timestamp (which is also milliseconds).
+
+// SIP call start — emitted once the call is established (setup response seen).
+message SipCallStart {
+    string  call_id          = 1;   // SIP Call-ID
+    uint64  timestamp        = 2;   // establishment time, UNIX timestamp (ms) = mSetupTime
+    SipPeer caller           = 3;   // mPeers.first  (originator)
+    SipPeer callee           = 4;   // mPeers.second (answerer)
+
+    uint32  setup_code       = 5;   // response code that established the call (default 200)
+    uint64  invite_timestamp = 6;   // first INVITE observed, UNIX timestamp (ms) — for post-dial delay
+}
+
+// SIP call end — emitted on BYE.
+message SipCallEnd {
+    string  call_id           = 1;
+    uint64  timestamp         = 2;   // BYE time (mByeTime), UNIX timestamp (ms)
+    SipDirection bye_direction = 3;  // who sent the BYE
+    repeated uint32 response_codes = 4;  // response codes seen over the dialog (mResponseCodes)
+    uint64  duration          = 5;   // milliseconds, mByeTime - mSetupTime (if both known)
+    bool    has_bye           = 6;   // false => ended by timeout / dangling, not BYE
+}
+
+// reINVITE (also covers UPDATE — same code path).
+message SipReinvite {
+    string  call_id          = 1;
+    uint64  timestamp        = 2;   // Reinvite::mTimestamp, UNIX timestamp (ms)
+    bool    is_request       = 3;   // request vs response (Reinvite::mIsRequest)
+    SipDirection direction   = 4;
+    SipPeer updated_peer     = 5;   // the peer whose SDP/media was renegotiated
+    string  raw_message      = 6;   // optional raw SIP text (Reinvite::mText)
+}
+
+// SIP call attempt failed — emitted when an INVITE never reaches the setup code.
+// Mutually exclusive with SipCallStart for a given Call-ID.
+message SipCallFailed {
+    string  call_id          = 1;   // SIP Call-ID
+    uint64  timestamp        = 2;   // when failure was determined, UNIX timestamp (ms)
+    SipPeer caller           = 3;   // mPeers.first  (originator)
+    SipPeer callee           = 4;   // mPeers.second (answerer)
+    uint64  invite_timestamp = 5;   // first INVITE observed, UNIX timestamp (ms)
+
+    enum Reason {
+        REASON_UNKNOWN  = 0;
+        REASON_REJECTED = 1;   // final non-2xx response (4xx / 5xx / 6xx)
+        REASON_CANCELED = 2;   // caller sent CANCEL before the call was answered
+        REASON_TIMEOUT  = 3;   // reserved: no final response, dialog reaped by gc() — not yet emitted
+    }
+    Reason  reason           = 6;
+    uint32  response_code    = 7;   // final SIP response code (e.g. 486, 603); 0 if none
+    string  reason_phrase    = 8;   // optional reason phrase from the status line
+}
+
+message Event {
+    Stream stream_report                                = 1;
+    StreamStart stream_start                            = 2;
+    StreamFinish stream_finish                          = 3;
+    CaptureStats capture_stats                          = 4;
+    StreamGhost stream_ghost                            = 5;
+    InstanceStatistics instance_stats                   = 6;
+
+    SipCallStart sip_call_start                         = 7;
+    SipCallEnd sip_call_end                             = 8;
+    SipReinvite sip_reinvite                            = 9;
+    SipCallFailed sip_call_failed                       = 10;
+
+    StreamAudio stream_audio                            = 11;
+
+    EspSaEvent esp_sa_event                             = 12;
+}
+
+// ---------------------------------------------------------------------------
+// Inbound control protocol (request/reply over a separate ZMQ_REP socket).
+//
+// By default vq-core only computes the cheap network MOS for every RTP stream.
+// Audio decoding + PVQA (Sevana MOS) is started for a stream only when one of
+// its SIP peers (caller or callee AOR) matches an entry in the in-memory
+// "to track" list. That list is mutated at runtime with the messages below;
+// it is not persisted and starts empty on each vq-core launch.
+// ---------------------------------------------------------------------------
+
+// One entry of the track list. The pattern is matched case-insensitively as a
+// substring against both peers' SIP AOR (e.g. "alice", "sip:alice@host").
+message TrackEntry {
+    string sip_pattern                  = 1;
+}
+
+// Control request sent to vq-core.
+message Command {
+    enum Op {
+        TRACK_ADD     = 0;   // add entries to the list (idempotent)
+        TRACK_REMOVE  = 1;   // remove entries from the list
+        TRACK_REPLACE = 2;   // replace the whole list with entries
+        TRACK_QUERY   = 3;   // return the current list, no mutation
+    }
+    Op op                               = 1;
+    repeated TrackEntry entries         = 2;   // ignored / empty for TRACK_QUERY
+}
+
+// Reply to a Command. Exactly one is sent per Command (ZMQ_REP contract).
+message CommandAck {
+    bool ok                             = 1;   // false => command rejected
+    string error                        = 2;   // human-readable reason when !ok
+    repeated TrackEntry current         = 3;   // full list after the op (or for QUERY)
+    uint32 affected_streams             = 4;   // live streams that began decoding as a result
+}

@@ -1,0 +1,71 @@
+{{define "content"}}
+{{$base := .Base}}
+{{with .Data}}
+<p><a href="{{$base}}/ui/sip-calls">← SIP calls</a></p>
+{{if .Error}}
+<div class="error-banner">{{.Error}}</div>
+{{else}}
+
+<div class="card">
+  <h2>Call summary</h2>
+  <dl class="kv">
+    <dt>Call-ID</dt><dd class="mono">{{.CallID}}</dd>
+    {{if .Caller}}<dt>Caller</dt><dd>{{.Caller}}</dd>{{end}}
+    {{if .Callee}}<dt>Callee</dt><dd>{{.Callee}}</dd>{{end}}
+    <dt>Outcome</dt><dd>
+      {{- if eq .Outcome "established"}}<span class="chip positive">Established</span>
+      {{- else if eq .Outcome "failed"}}<span class="chip danger">Failed</span>
+      {{- else}}<span class="chip neutral">Unknown</span>{{end}}</dd>
+    <dt>Events</dt><dd>{{.EventCount}}</dd>
+  </dl>
+</div>
+
+<div class="card section">
+  <h2>Related RTP streams</h2>
+  {{if .Streams}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Status</th><th>Time</th><th>Source</th><th>Destination</th>
+        <th>Sevana MOS</th><th>Network MOS</th><th>Details</th>
+      </tr></thead>
+      <tbody>
+        {{range .Streams}}
+        <tr>
+          <td>{{if .active}}<span class="chip positive">Active</span>{{else}}<span class="chip neutral">Finished</span>{{end}}</td>
+          <td>{{.start_time}}</td>
+          <td class="mono">{{.source}}</td>
+          <td class="mono">{{.destination}}</td>
+          <td>{{template "mos-pill" (mos .sevana_mos true)}}</td>
+          <td>{{template "mos-pill" (mos .network_mos false)}}</td>
+          <td>{{if .stream_id}}<a href="{{$base}}/ui/stream/{{queryEsc .stream_id}}" title="Details">↗</a>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p class="muted">No related RTP streams</p>{{end}}
+</div>
+
+<div class="card section">
+  <h2>Event timeline</h2>
+  {{if .Events}}
+  {{range .Events}}
+  <div class="event-tile">
+    <div class="event-head">
+      <span class="chip {{.Tone}}">{{.TypeLabel}}</span>
+      <span class="muted">{{.Time}}</span>
+      <span class="spacer"></span>
+      <button type="button" class="small-btn" data-copy-text="{{.CopyJSON}}" title="Copy JSON">⧉</button>
+      <button type="button" class="small-btn" data-copy-text="{{.CopyMD}}" title="Copy Markdown">≡</button>
+    </div>
+    <dl class="kv">
+      {{range .KV}}<dt>{{.Name}}</dt><dd>{{.Value}}</dd>{{end}}
+    </dl>
+  </div>
+  {{end}}
+  {{else}}<p class="muted empty">No data</p>{{end}}
+</div>
+{{end}}
+{{end}}
+{{end}}

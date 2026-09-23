@@ -1,0 +1,12 @@
+vq-db — Sevana VQ monitor dashboard/persistence component
+Copyright 2026 Sevana Ou PTE. LTD.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product bundles third-party software:
+
+- htmx (backend-go/internal/web/static/htmx.min.js), licensed under the
+  Zero-Clause BSD license (0BSD). https://htmx.org
+
+The compiled binary statically links Go modules listed in backend-go/go.mod,
+each distributed under its own license (BSD-3-Clause, MIT, Apache-2.0).

@@ -1,0 +1,56 @@
+{{define "content"}}
+{{$base := .Base}}
+<div class="page-head">
+  <h1>Track list</h1>
+</div>
+{{with .Data}}
+{{if .Affected}}<div class="flash">{{.Affected}} stream(s) switched to full analysis</div>{{end}}
+<div class="card">
+  <div class="card-head">
+    <h2>Tracked addresses{{if .Patterns}} : {{.Count}}{{end}}</h2>
+  </div>
+  <p class="muted small">Calls whose caller or callee matches a pattern (case-insensitive substring,
+  e.g. &quot;alice&quot; or &quot;1001&quot;) get full audio + Sevana MOS analysis. Everything else stays
+  network-MOS only.</p>
+
+  {{if .Unavailable}}
+  <p class="muted empty">vq-core control socket unavailable.</p>
+  {{else}}
+  <form class="toolbar" method="post" action="{{$base}}/ui/track/add">
+    <input class="grow" type="text" name="pattern"
+           placeholder="SIP address or substring (e.g. alice, sip:bob@host, 1001)">
+    <button type="submit" class="primary">＋ Add</button>
+  </form>
+  {{if .Error}}<div class="error-banner">Error: {{.Error}}</div>{{end}}
+  <div id="track-body" hx-get="{{$.SelfURL}}" hx-trigger="every 10s" hx-swap="innerHTML">
+{{template "track-body" $}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "track-body"}}
+{{$base := .Base}}
+{{with .Data}}
+{{if .Patterns}}
+<ul class="track-list">
+  {{range .Patterns}}
+  <li>
+    <span class="mono"># {{.}}</span>
+    <form method="post" action="{{$base}}/ui/track/remove">
+      <input type="hidden" name="pattern" value="{{.}}">
+      <button type="submit" class="small-btn" title="Remove">🗑</button>
+    </form>
+  </li>
+  {{end}}
+</ul>
+<form method="post" action="{{$base}}/ui/track/clear" class="clear-all"
+      onsubmit="return confirm('Remove all tracked addresses?')">
+  <button type="submit">Clear all</button>
+</form>
+{{else if not .Unavailable}}
+<p class="muted empty">No addresses tracked — all calls get network MOS only.</p>
+{{end}}
+{{end}}
+{{end}}

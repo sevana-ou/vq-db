@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} — Sevana VQ monitor</title>
+<link rel="stylesheet" href="{{.Base}}/ui/static/app.css">
+<script>
+// Apply the saved theme before first paint to avoid a flash.
+(function () {
+  var t = localStorage.getItem("vq-theme");
+  if (t === "dark" || (t === null && matchMedia("(prefers-color-scheme: dark)").matches)) {
+    document.documentElement.dataset.theme = "dark";
+  }
+  // Legacy Flutter deep links used hash routing: /#/streams → /ui/streams.
+  var h = location.hash;
+  if (h && h.indexOf("#/") === 0) {
+    var route = h.slice(1);
+    location.replace("{{.Base}}/ui" + (route === "/" ? "/summary" : route));
+  }
+})();
+</script>
+<script src="{{.Base}}/ui/static/htmx.min.js" defer></script>
+<script src="{{.Base}}/ui/static/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">VQ</span>
+      <span class="brand-name">Sevana&nbsp;VQ&nbsp;monitor</span>
+    </div>
+    <nav>
+      <a href="{{.Base}}/ui/summary" class="{{if eq .Nav "summary"}}active{{end}}">Summary</a>
+      <a href="{{.Base}}/ui/core" class="{{if eq .Nav "core"}}active{{end}}">Core status</a>
+      <a href="{{.Base}}/ui/streams" class="{{if eq .Nav "streams"}}active{{end}}">Streams</a>
+      <a href="{{.Base}}/ui/sip-calls" class="{{if eq .Nav "sip-calls"}}active{{end}}">SIP calls</a>
+      <a href="{{.Base}}/ui/track" class="{{if eq .Nav "track"}}active{{end}}">Track list</a>
+    </nav>
+    <div class="sidebar-foot">
+      <button type="button" id="theme-toggle" title="Toggle theme">◐</button>
+      <span class="version">v{{.Version}}</span>
+    </div>
+  </aside>
+  <main>
+{{template "content" .}}
+  </main>
+</div>
+</body>
+</html>
+
+{{define "mos-pill"}}{{if .}}<span class="mos {{.Band}}" title="{{.Label}}"><span class="mos-dot"></span>{{.Text}}</span>{{end}}{{end}}
+
+{{define "pager"}}
+<div class="pager">
+  <span>Rows per page</span>
+  {{range .LimitLinks}}{{if .Current}}<span class="pg current">{{.N}}</span>{{else}}<a class="pg" href="{{.URL}}">{{.N}}</a>{{end}}{{end}}
+  <span class="spacer"></span>
+  <span>{{.RangeText}}</span>
+  {{if .PrevURL}}<a class="pg" href="{{.PrevURL}}" title="Previous page">‹</a>{{else}}<span class="pg disabled">‹</span>{{end}}
+  {{if .NextURL}}<a class="pg" href="{{.NextURL}}" title="Next page">›</a>{{else}}<span class="pg disabled">›</span>{{end}}
+</div>
+{{end}}

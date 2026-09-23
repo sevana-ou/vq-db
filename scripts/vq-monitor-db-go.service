@@ -1,0 +1,20 @@
+[Unit]
+Description=vq-monitor-db-go (Go vq-db) dashboard/ingest service
+Wants=network-online.target
+After=network.target network-online.target
+# Runs IN PARALLEL with the C++ vq-db (vq-db.service) and the Python
+# vq-monitor-db: separate config, dashboard port, and data dir, but the same
+# vq-core bus ports. A single static binary — no venv, no interpreter.
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/vq-monitor-db-go/data
+# Self-contained install laid down by scripts/install_bundle.sh.
+ExecStart=/opt/vq-monitor-db-go/bin/vq-db --config /opt/vq-monitor-db-go/etc/vq-monitor.cfg
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

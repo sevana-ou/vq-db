@@ -1,0 +1,71 @@
+{{define "content"}}
+<div class="page-head">
+  <h1>Streams</h1>
+</div>
+{{template "stream-card" (dictCard $ .Data.Active)}}
+{{template "stream-card" (dictCard $ .Data.Finished)}}
+{{end}}
+
+{{define "tbl-a"}}{{template "stream-card-body" (dictCard $ .Data.Active)}}{{end}}
+{{define "tbl-f"}}{{template "stream-card-body" (dictCard $ .Data.Finished)}}{{end}}
+
+{{define "stream-card"}}
+<div class="card section">
+  <form class="toolbar" method="get" action="{{.P.Base}}/ui/streams">
+    {{range .C.Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">{{end}}
+    <input class="grow" type="text" name="{{.C.FilterName}}" value="{{.C.FilterValue}}"
+           placeholder="Filter (e.g. sevana_mos &gt; 3 &amp;&amp; jitter &lt; 50)">
+    <button type="submit" class="primary">Apply</button>
+    {{if .C.FilterValue}}<a class="btn" href="{{.P.Base}}/ui/streams">Reset</a>{{end}}
+  </form>
+  <div id="{{.C.ID}}" hx-get="{{.P.Data.PollURL}}" hx-trigger="every 10s" hx-swap="innerHTML">
+{{template "stream-card-body" .}}
+  </div>
+  <div class="card-foot">
+    <a class="btn" href="{{.P.Base}}{{.C.CSVPath}}" download>⭳ Export to CSV</a>
+  </div>
+</div>
+{{end}}
+
+{{define "stream-card-body"}}
+<div class="card-head">
+  <h2>{{.C.Title}} : {{.C.Total}}</h2>
+  {{if gt .C.NewCount 0}}<span class="chip positive">{{.C.NewCount}} New</span>{{end}}
+</div>
+{{if .C.Error}}<div class="error-banner">Error: {{.C.Error}}</div>{{end}}
+{{if .C.Rows}}
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      {{range .C.Cols}}
+      <th {{if .Num}}class="num"{{end}}>
+        {{- if .URL}}<a href="{{.URL}}" {{if .Sorted}}class="sorted"{{end}}>{{.Label}}{{if .Sorted}}{{if .Desc}} ▼{{else}} ▲{{end}}{{end}}</a>{{else}}{{.Label}}{{end -}}
+      </th>
+      {{end}}
+    </tr></thead>
+    <tbody>
+      {{$p := .P}}{{$off := .C.Q.Offset}}
+      {{range $i, $row := .C.Rows}}
+      <tr>
+        <td class="num muted">{{add $off (add $i 1)}}</td>
+        <td>{{$row.start_time}}</td>
+        <td class="mono">{{$row.source}}</td>
+        <td class="mono">{{$row.destination}}</td>
+        <td class="num">{{raw $row.duration}}</td>
+        <td>{{template "mos-pill" (mos $row.sevana_mos true)}}</td>
+        <td>{{template "mos-pill" (mos $row.network_mos false)}}
+            {{if $row.silence_suspected}}<span class="chip warning icon" title="Silence suspected {{pct0 $row.silence_ratio}}">🔇</span>{{end}}</td>
+        <td class="num">{{raw $row.jitter}}</td>
+        <td>{{$row.sip_src}}</td>
+        <td>{{$row.sip_dst}}</td>
+        <td>{{if $row.stream_id}}<a href="{{$p.Base}}/ui/stream/{{queryEsc $row.stream_id}}" title="Details">↗</a>{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{template "pager" .C.Pager}}
+{{else if not .C.Error}}
+<p class="muted empty">No data</p>
+{{end}}
+{{end}}

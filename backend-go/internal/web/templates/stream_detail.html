@@ -1,0 +1,92 @@
+{{define "content"}}
+{{$base := .Base}}
+{{with .Data}}
+{{if .Error}}
+<p><a href="{{$base}}/ui/streams">← Streams</a></p>
+<div class="error-banner">{{.Error}}</div>
+{{else}}
+<p><a href="{{$base}}/ui/streams">← Streams</a></p>
+
+<div class="card">
+  <div class="card-head">
+    <h2>Statistics</h2>
+    <span class="spacer"></span>
+    <button type="button" class="small-btn" data-copy-text="{{.CopyJSON}}">Copy JSON</button>
+    <button type="button" class="small-btn" data-copy-text="{{.CopyMD}}">Copy Markdown</button>
+  </div>
+  {{$d := .D}}
+  <dl class="kv">
+    <dt>Source</dt><dd class="mono">{{$d.source}}</dd>
+    <dt>Destination</dt><dd class="mono">{{$d.destination}}</dd>
+    <dt>SSRC</dt><dd class="mono">{{$d.ssrc}}</dd>
+    <dt>Sevana MOS</dt><dd>{{template "mos-pill" (mos $d.sevana_mos true)}}</dd>
+    <dt>Network MOS</dt><dd>{{template "mos-pill" (mos $d.network_mos false)}}</dd>
+    <dt>Jitter (ms)</dt><dd>{{fmtF2 $d.jitter}}</dd>
+    <dt>RTT delay (ms)</dt><dd>{{raw $d.rtt_delay}}</dd>
+    <dt>Codec</dt><dd>{{$d.codec}}</dd>
+    <dt>RTP packets</dt><dd>{{raw $d.rtp_packet_counter}}</dd>
+    <dt>Lost packets</dt><dd>{{raw $d.lost_packet_counter}}</dd>
+    {{if .DtxText}}
+    <dt>DTX frames (silence / comfort-noise / total)</dt><dd>{{.DtxText}}</dd>
+    <dt>Silence</dt><dd>{{.SilencePct}}{{if .SilenceSuspected}} <span class="chip warning">🔇 Silence suspected</span>{{end}}</dd>
+    {{end}}
+    <dt>Sevana Rfactor</dt><dd>{{.Rfactor}}</dd>
+    <dt>SIP callid</dt><dd>{{if $d.sip_callid}}<a href="{{$base}}/ui/sip-call/{{queryEsc $d.sip_callid}}">{{$d.sip_callid}} ↗</a>{{end}}</dd>
+    <dt>SIP destination</dt><dd>{{$d.sip_dst}}</dd>
+    <dt>SIP source</dt><dd>{{$d.sip_src}}</dd>
+  </dl>
+</div>
+
+{{if .HasDetectors}}
+<div class="card section">
+  <h2>Impairments summary</h2>
+  {{if .Detectors}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Impairment</th><th class="num">Occurrences</th></tr></thead>
+      <tbody>
+        {{range .Detectors}}<tr><td>{{.Name}}</td><td class="num">{{.Count}}</td></tr>{{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p class="muted">No impairments detected.</p>{{end}}
+</div>
+{{end}}
+
+<div class="card section">
+  <h2>Audio recording</h2>
+  <audio controls preload="metadata" src="{{$base}}{{.AudioPath}}"
+         onerror="this.outerHTML='<p class=&quot;muted&quot;>No audio recorded for this stream.</p>'"></audio>
+  <p><a class="btn" href="{{$base}}{{.AudioPath}}" download>⭳ Download WAV</a></p>
+</div>
+
+{{if .Chunks}}
+<div class="card section">
+  <h2>Stream chunks</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Interval of chunk</th><th>Sevana MOS</th><th>Network MOS</th><th></th></tr></thead>
+      <tbody>
+        {{$id := .LinkID}}
+        {{range .Chunks}}
+        <tr>
+          <td><a href="{{$base}}/ui/chunk/{{queryEsc $id}}/{{.TS}}"
+                 hx-get="{{$base}}/ui/chunk/{{queryEsc $id}}/{{.TS}}"
+                 hx-target="#chunk-inline" hx-swap="innerHTML show:#chunk-inline:top">{{.Label}}</a></td>
+          <td>{{template "mos-pill" .SevanaMos}}</td>
+          <td>{{template "mos-pill" .NetworkMos}}</td>
+          <td class="row-actions">
+            <button type="button" class="small-btn" data-copy-text="{{.CopyJSON}}" title="Copy JSON">⧉</button>
+            <button type="button" class="small-btn" data-copy-text="{{.CopyMD}}" title="Copy Markdown">≡</button>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div id="chunk-inline" class="section"></div>
+{{end}}
+{{end}}
+{{end}}
+{{end}}

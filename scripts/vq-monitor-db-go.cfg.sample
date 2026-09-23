@@ -1,0 +1,76 @@
+# Sample configuration for vq-monitor-db-go (the Go re-implementation of vq-db).
+#
+# This is the GO service's OWN config. It is designed to run IN PARALLEL with the
+# C++ vq-db (dashboard :9126) and the Python vq-monitor-db (dashboard :9136): it
+# connects to the SAME vq-core instance (the server.zeromq-* ports below) but
+# uses its OWN dashboard port and database/data directory, so the three services
+# never collide. Installed to /opt/vq-monitor-db-go/etc/vq-monitor.cfg — it does
+# NOT touch any other config.
+#
+# vq-db reads only the blocks below: logging, server.instance, server.zeromq-*,
+# server.track-resync-interval, server.ghost-stream-timeout, server.pidfile-db,
+# dashboard, database.
+
+logging:
+    level:    info                  # critical | error | warning | info | debug
+    db:       ''                    # log file; empty -> log to console/journal
+    console:  true
+
+server:
+    instance:
+        id:                 agent_1
+        name:               First instance
+    # SAME ports as the C++/Python vq-db: all subscribe to the one vq-core
+    # instance (PUB/SUB fans out to every subscriber; the REQ control socket is
+    # shared).
+    zeromq-port:            9125    # vq-core PUB bus (default)
+    zeromq-control-port:    9127    # vq-core REP control socket (default)
+    track-resync-interval:  60      # seconds; re-apply persisted track patterns to
+                                    # vq-core if it restarts. 0 disables.
+    ghost-stream-timeout:   120s    # finalize an active stream whose stream_finish
+                                    # never arrived after this idle time. 0 disables.
+    pidfile-db:             /opt/vq-monitor-db-go/data/vq-db.pid
+
+dashboard:
+    # DIFFERENT from the C++ vq-db (9126) and Python vq-monitor-db (9136) so all
+    # three can run at once during the side-by-side migration soak.
+    # The web UI is embedded in the binary and served at /ui/ (the root
+    # redirects there); `root:` is deprecated and ignored.
+    host:               0.0.0.0     # bind address; 127.0.0.1 behind a reverse proxy
+                                    # (the --host flag overrides it)
+    port:               9146
+    max-streams:        40
+    good-mos-threshold: 3.6
+
+database:
+    engine:             sqlite3
+    # OWN database file, separate from the other deployments'.
+    connection:         "db=/opt/vq-monitor-db-go/data/vq-monitor.sqlite"
+    records-lifetime:   7d          # expire whole streams + SIP events once all older than this
+    audio-lifetime:     1d          # purge stored audio sooner than the record lifetime (audio is heavy)
+    csv:                /opt/vq-monitor-db-go/data/vq-db.csv
+
+    # --- Optional: in-memory + bounded retention (all off by default) ---------
+    # Keep the database entirely in RAM (nothing written to disk; data is lost on
+    # restart). Combine with the bounds below so memory stays bounded:
+    #   connection:     "db=:memory:"
+    #
+    # records-limit: keep only the N most-recently-active calls; older calls are
+    # evicted as new ones complete. 0 (default) = unlimited. A "call" is a distinct
+    # SIP Call-ID (a stream with no Call-ID counts as one).
+    #   records-limit:  500
+    #
+    # store-sip-filter: persist only calls whose SIP source/destination contains
+    # one of these substrings (case-insensitive, like the track list). Empty
+    # (default) = store every call. Calls with no matching SIP (incl. network-MOS-
+    # only streams) are not stored when this is set.
+    #   store-sip-filter:
+    #       - "sip:vip@"
+    #       - "1800"
+
+    # Postgres / MySQL: set engine to postgresql or mysql and use a SOCI-style
+    # connection string, e.g.
+    #   engine:     postgresql
+    #   connection: "dbname=vqmonitor host=localhost user=vq password=secret"
+    # NOTE: the Go build currently wires only the SQLite driver; enable the
+    # pg/mysql drivers in internal/db/open.go before using those engines.

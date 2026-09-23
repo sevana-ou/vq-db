@@ -1,0 +1,57 @@
+{{define "content"}}
+<div class="page-head">
+  <h1>Summary</h1>
+  <span class="spacer"></span>
+</div>
+<div id="summary-body" hx-get="{{.SelfURL}}" hx-trigger="every 10s" hx-swap="innerHTML">
+{{template "summary-body" .}}
+</div>
+{{end}}
+
+{{define "summary-body"}}
+{{with .Data}}
+<div class="card">
+  <div class="card-head">
+    <h2>Live</h2>
+    {{if .Core}}<a class="chip positive" href="{{$.Base}}/ui/core" title="Core status">✓ Core online</a>{{else}}<a class="chip neutral" href="{{$.Base}}/ui/core" title="Core status">Core offline</a>{{end}}
+  </div>
+  <div class="metrics">
+    <div class="metric"><span class="metric-label">Active streams</span><span class="stat">{{.ActiveStreams}}</span></div>
+    <div class="metric"><span class="metric-label">Sessions started</span><span class="metric-value">{{.SessionStarted}}</span></div>
+    <div class="metric"><span class="metric-label">Sessions finished</span><span class="metric-value">{{.SessionFinished}}</span></div>
+  </div>
+</div>
+
+<div class="hist-row section">
+  {{if .H1}}{{template "hist-card" .H1}}{{end}}
+  {{if .H24}}{{template "hist-card" .H24}}{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "hist-card"}}
+<div class="card">
+  <div class="card-head">
+    <h2>{{.Title}}</h2>
+    <span class="pill-badge" title="Threshold">{{.Threshold}}</span>
+  </div>
+  <div class="metric"><span class="metric-label">Streams</span><span class="stat">{{.StreamCount}}</span></div>
+  {{template "good-rate" .Sevana}}
+  {{template "good-rate" .Network}}
+  <hr>
+  <dl class="kv">
+    <dt>Avg Sevana MOS</dt><dd>{{template "mos-pill" .AvgSevana}}</dd>
+    <dt>Avg Network MOS</dt><dd>{{template "mos-pill" .AvgNetwork}}</dd>
+    <dt>Avg R-factor</dt><dd>{{.AvgRfactor}}</dd>
+    <dt>Avg duration (s)</dt><dd>{{.AvgDuration}}</dd>
+  </dl>
+  <p class="muted small">{{.CoverageText}}</p>
+</div>
+{{end}}
+
+{{define "good-rate"}}
+<div class="good-rate">
+  <div class="good-rate-row"><span>{{.Label}}</span><span class="mono">{{.Text}}</span></div>
+  <div class="bar"><div class="bar-fill" style="width: {{printf "%.1f" (num .Ratio)}}%;"></div></div>
+</div>
+{{end}}

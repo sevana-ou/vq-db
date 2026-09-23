@@ -1,0 +1,57 @@
+{{define "content"}}
+<div class="page-head">
+  <h1>Core status</h1>
+  {{if .Data.Core}}<span class="chip positive">✓ Core online</span>{{else}}<span class="chip neutral">Core offline</span>{{end}}
+  <span class="spacer"></span>
+</div>
+<div id="core-body" hx-get="{{.SelfURL}}" hx-trigger="every 10s" hx-swap="innerHTML">
+{{template "core-body" .}}
+</div>
+{{end}}
+
+{{define "core-body"}}
+{{with .Data}}
+{{if .Core}}
+<div class="card">
+  <h2>Capturers</h2>
+  {{if .Capturers}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Device</th><th class="num">Packets</th><th class="num">RTP</th><th class="num">SIP</th>
+        <th class="num">Truncated</th><th class="num">Dropped (HW)</th><th class="num">Errored</th><th class="num">Mbuf fail</th>
+      </tr></thead>
+      <tbody>
+        {{range .Capturers}}
+        <tr>
+          <td>{{if .device}}{{.device}}{{else}}—{{end}}</td>
+          <td class="num">{{fmtInt .packets_total}}</td>
+          <td class="num">{{fmtInt .packets_rtp}}</td>
+          <td class="num">{{fmtInt .packets_sip}}</td>
+          <td class="num">{{fmtInt .packets_truncated}}</td>
+          <td class="num">{{fmtInt .packets_dropped_hw}}</td>
+          <td class="num">{{fmtInt .packets_erroneous}}</td>
+          <td class="num">{{fmtInt .mbuf_alloc_failed}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p class="muted"><em>No capture devices reported by vq-core</em></p>{{end}}
+</div>
+
+<div class="card section">
+  <h2>Core details</h2>
+  <dl class="kv">
+    {{range .CoreRows}}
+    <dt>{{.Label}}</dt><dd>{{.Value}}</dd>
+    {{end}}
+  </dl>
+</div>
+{{else}}
+<div class="card">
+  <p class="muted"><em>vq-core has not reported any instance statistics yet — the bus may be down or the probe has just started.</em></p>
+</div>
+{{end}}
+{{end}}
+{{end}}

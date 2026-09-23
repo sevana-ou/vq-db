@@ -1,0 +1,50 @@
+{{define "content"}}
+<div class="page-head">
+  <h1>SIP calls</h1>
+</div>
+<div class="card">
+  <div id="table" hx-get="{{.SelfURL}}" hx-trigger="every 10s" hx-swap="innerHTML">
+{{template "table" .}}
+  </div>
+</div>
+{{end}}
+
+{{define "table"}}
+{{$base := .Base}}
+{{with .Data}}
+<div class="card-head">
+  <h2>SIP Calls{{if .Rows}} : {{.Total}}{{end}}</h2>
+</div>
+{{if .Error}}<div class="error-banner">Error: {{.Error}}</div>{{end}}
+{{if .Rows}}
+<div class="table-wrap">
+  <table>
+    <thead><tr>
+      <th class="num">#</th><th>Caller</th><th>Callee</th><th>Start time</th>
+      <th>Duration</th><th>Status</th><th>Code</th><th>Details</th>
+    </tr></thead>
+    <tbody>
+      {{$off := .Offset}}
+      {{range $i, $row := .Rows}}
+      <tr>
+        <td class="num muted">{{add $off (add $i 1)}}</td>
+        <td>{{$row.caller}}</td>
+        <td>{{$row.callee}}</td>
+        <td>{{sipTime $row.start_timestamp}}</td>
+        <td class="num">{{sipDur $row.duration}}</td>
+        <td>{{if eq $row.outcome "established"}}<span class="chip positive">Ok</span>
+            {{- else if eq $row.outcome "failed"}}<span class="chip danger">Failed</span>
+            {{- else}}<span class="chip neutral">Unknown</span>{{end}}</td>
+        <td>{{sipCode $row}}</td>
+        <td>{{if $row.call_id}}<a href="{{$base}}/ui/sip-call/{{queryEsc $row.call_id}}" title="Details">↗</a>{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{template "pager" .Pager}}
+{{else if not .Error}}
+<p class="muted empty">No data</p>
+{{end}}
+{{end}}
+{{end}}
