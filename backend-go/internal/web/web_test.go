@@ -357,3 +357,60 @@ func TestCopyJSONPrefersJsonReport(t *testing.T) {
 		t.Errorf("copyJSON fallback = %q", got)
 	}
 }
+
+// sevanaPages are the pages that show Sevana MOS figures when PVQA is present.
+var sevanaPages = []string{"/ui/summary", "/ui/streams", "/ui/stream/lnk-1", "/ui/chunk/lnk-1/11000", "/ui/sip-call/c1", "/ui/core", "/ui/track"}
+
+// withSnapshot returns the seeded app with vq-core reporting version and the
+// dashboard.sevana-mos mode.
+func withSnapshot(t *testing.T, version, mode string) *App {
+	t.Helper()
+	app := seededApp(t)
+	snap := state.NewInstanceSnapshot()
+	snap.Set(model.InstanceStatistics{Version: version})
+	app.deps.Snapshot = snap
+	app.deps.SevanaMos = mode
+	return app
+}
+
+func TestSevanaHiddenForEngineWithoutPvqa(t *testing.T) {
+	app := withSnapshot(t, "Server v1.9.1 / build number 13914 / network analysis only (no PVQA)", "auto")
+	for _, path := range sevanaPages {
+		code, body := get(t, app, path, nil)
+		if code != 200 {
+			t.Fatalf("%s: code %d", path, code)
+		}
+		// Labels only: the Copy JSON / Markdown payloads carry the API's fields.
+		for _, bad := range []string{"Sevana MOS", "Sevana good", "Sevana Rfactor", "PVQA coverage", "PVQA instances", "Detectors report", "Impairments", "sevana_mos &gt;"} {
+			if strings.Contains(body, bad) {
+				t.Errorf("%s shows %q for an engine without PVQA", path, bad)
+			}
+		}
+	}
+	// Network MOS stays.
+	for _, path := range []string{"/ui/summary", "/ui/streams", "/ui/stream/lnk-1"} {
+		if _, body := get(t, app, path, nil); !strings.Contains(body, "Network MOS") && !strings.Contains(body, "Network good") {
+			t.Errorf("%s lost its network MOS", path)
+		}
+	}
+}
+
+func TestSevanaShownForPvqaEngineAndByOverride(t *testing.T) {
+	cases := []struct{ version, mode string }{
+		{"Server v1.9.1 / build number 13914 / PVQA v1.8.2", "auto"},
+		{"Server v1.9.1 / build number 13914 / network analysis only (no PVQA)", "on"},
+	}
+	for _, c := range cases {
+		app := withSnapshot(t, c.version, c.mode)
+		for _, path := range []string{"/ui/summary", "/ui/streams", "/ui/stream/lnk-1", "/ui/sip-call/c1"} {
+			if _, body := get(t, app, path, nil); !strings.Contains(body, "Sevana") {
+				t.Errorf("%q/%s: %s does not show Sevana MOS", c.version, c.mode, path)
+			}
+		}
+	}
+	// "off" hides it even for a PVQA engine.
+	app := withSnapshot(t, "Server v1.9.1 / PVQA v1.8.2", "off")
+	if _, body := get(t, app, "/ui/streams", nil); strings.Contains(body, "Sevana MOS") {
+		t.Error("sevana-mos: off still shows the Sevana MOS column")
+	}
+}

@@ -41,6 +41,11 @@ dashboard:
     port:               9146
     max-streams:        40
     good-mos-threshold: 3.6
+    # Sevana MOS (PVQA) figures in the web UI: its MOS, R-factor, detector
+    # reports and PVQA counters. "auto" hides them when vq-core reports a
+    # build without PVQA (network analysis only); "on" / "off" force it. The
+    # JSON API always returns every field.
+    sevana-mos:         auto
 
 database:
     engine:             sqlite3

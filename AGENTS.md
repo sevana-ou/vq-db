@@ -148,7 +148,9 @@ Config is the shared `vq-monitor.cfg` YAML (same file vq-core reads); only the
 blocks are used (`internal/config/config.go`). Defaults: PUB bus 9125, control
 9127, dashboard 9126 (the Go bundle sample uses 9146 to coexist with earlier
 builds). The `dashboard` block also carries quality tuning: `good-mos-threshold`
-(3.6) and `silence-ratio-threshold` (0.8). The `database` block supports opt-in
+(3.6) and `silence-ratio-threshold` (0.8), and `sevana-mos` (`auto`/`on`/`off`):
+`auto` hides every Sevana MOS / PVQA figure in the UI once vq-core reports a
+build without PVQA (version "... (no PVQA)"); the JSON API is unaffected. The `database` block supports opt-in
 **bounded retention** (both default off): `records-limit` (keep only the N
 most-recent calls) and `store-sip-filter` (persist only SIP-matching calls) —
 most useful with an in-memory DB (`connection: "db=:memory:"`) to keep bounded

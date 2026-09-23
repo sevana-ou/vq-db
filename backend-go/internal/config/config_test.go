@@ -192,3 +192,27 @@ func TestLoadConfigDefaultsWhenBlocksMissing(t *testing.T) {
 		t.Error("HasDatabase = true")
 	}
 }
+
+func TestSevanaMosMode(t *testing.T) {
+	for _, c := range []struct{ yaml, want string }{
+		{"", "auto"},
+		{"    sevana-mos: auto\n", "auto"},
+		{"    sevana-mos: true\n", "on"},
+		{"    sevana-mos: yes\n", "on"},
+		{"    sevana-mos: off\n", "off"},
+		{"    sevana-mos: false\n", "off"},
+		{"    sevana-mos: maybe\n", "auto"},
+	} {
+		p := filepath.Join(t.TempDir(), "d.cfg")
+		if err := os.WriteFile(p, []byte("dashboard:\n    port: 9146\n"+c.yaml), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.SevanaMos != c.want {
+			t.Errorf("%q: SevanaMos = %q, want %q", c.yaml, cfg.SevanaMos, c.want)
+		}
+	}
+}
