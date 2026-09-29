@@ -114,7 +114,7 @@ func run() int {
 
 	control, err := bus.ControlClientForPort(cfg.ZeroMQControlPort, 5*time.Second)
 	if err != nil {
-		slog.Warn("could not open control socket", "err", err)
+		slog.Warn("could not open control socket, will retry", "err", err)
 	}
 	trackStore := db.NewTrackStore(writer)
 

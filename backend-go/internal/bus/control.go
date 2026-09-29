@@ -56,13 +56,12 @@ type ControlClient struct {
 	socket   zmq4.Socket
 }
 
-// NewControlClient constructs and connects a ControlClient.
+// NewControlClient constructs and connects a ControlClient. If vq-core is not
+// listening yet (e.g. both start at boot) it returns the dial error together
+// with a usable client, which dials again on the next Send.
 func NewControlClient(endpoint string, timeout time.Duration) (*ControlClient, error) {
 	c := &ControlClient{endpoint: endpoint, timeout: timeout}
-	if err := c.openSocket(); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return c, c.openSocket()
 }
 
 // ControlClientForPort constructs a ControlClient for tcp://localhost:<port>.
@@ -75,7 +74,12 @@ func (c *ControlClient) openSocket() error {
 		c.socket.Close()
 	}
 	c.socket = zmq4.NewReq(context.Background())
-	return c.socket.Dial(c.endpoint)
+	if err := c.socket.Dial(c.endpoint); err != nil {
+		c.socket.Close()
+		c.socket = nil
+		return err
+	}
+	return nil
 }
 
 // Close closes the underlying socket.
@@ -103,6 +107,12 @@ func (c *ControlClient) Send(op TrackOp, patterns []string) TrackAck {
 	defer c.mu.Unlock()
 
 	var result TrackAck
+	if c.socket == nil {
+		if err := c.openSocket(); err != nil {
+			result.Error = err.Error()
+			return result
+		}
+	}
 	if err := c.socket.Send(zmq4.NewMsg(buffer)); err != nil {
 		c.openSocket()
 		result.Error = err.Error()
