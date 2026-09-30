@@ -28,8 +28,8 @@
       {{range $i, $row := .Rows}}
       <tr>
         <td class="num muted">{{add $off (add $i 1)}}</td>
-        <td>{{$row.caller}}</td>
-        <td>{{$row.callee}}</td>
+        <td class="clip wide" title="{{$row.caller}}">{{$row.caller}}</td>
+        <td class="clip wide" title="{{$row.callee}}">{{$row.callee}}</td>
         <td>{{sipTime $row.start_timestamp}}</td>
         <td class="num">{{sipDur $row.duration}}</td>
         <td>{{if eq $row.outcome "established"}}<span class="chip positive">Ok</span>

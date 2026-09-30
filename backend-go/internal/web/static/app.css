@@ -163,6 +163,8 @@ td.num, th.num { text-align: right; }
 /* Long values (SIP URIs): these columns share the width the others leave,
    down to 12ch, and are cut with an ellipsis; the full text is the title. */
 td.clip { max-width: 0; min-width: 10ch; width: 20%; overflow: hidden; text-overflow: ellipsis; }
+/* in tables with few other columns (SIP calls) */
+td.clip.wide { width: 35%; }
 .row-actions { display: flex; gap: 4px; }
 
 /* ---- MOS pill ---- */
