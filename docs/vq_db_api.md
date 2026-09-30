@@ -335,6 +335,7 @@ Folds the raw events into one summary row per `call_id`, most-recently-active fi
 | `call_id`         | string | —                                    | Restrict the result to a single SIP Call-ID (exact match). URL-encode it; the server URI-decodes the value. Handy to fetch the summary of one specific call. |
 | `limit`           | int    | `dashboard.max-streams` (40)         | Page size; values `<= 0` fall back to `50`. |
 | `offset`          | int    | `0`                                  | Zero-based row offset; negatives are clamped to `0`. |
+| `filter`          | string | —                                    | Filter expression over the per-call row (see [FILTER.md §9](FILTER.md#9-go-port-additions-substring-match-and-sip-calls-filter)), e.g. `callee ~ "9070000205" && sevana_mos < 3.8`. A bad expression returns `200` with an `error` field, `total_calls_count: 0` and no calls. |
 
 A call is included if any of its events falls within the `[start_timestamp, end_timestamp]` window. When `call_id` is given, `total_calls_count` is `1` if the call exists and `0` otherwise.
 

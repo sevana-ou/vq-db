@@ -250,3 +250,42 @@ For each, record C++ behavior first; that is the parity oracle.
 - Risk: **medium** — the language is tiny, but the coercion quirks and the
   memory/SQL divergences need a captured oracle to lock down. No third-party
   parser dependency is required.
+
+---
+
+## 9. Go port additions: substring match and SIP calls filter
+
+### `~` — case-insensitive substring
+
+`a ~ b` is true when the text of `b` occurs in the text of `a`, ignoring case.
+It binds like `==` / `!=` (tighter than `&&` / `||`). In SQL it is emitted as
+`(instr(lower(CAST(a AS TEXT)), lower(?)) > 0)` with `b` bound as a parameter
+(SQLite, the only wired engine); in memory numbers are matched as their text and
+a missing (NULL) value contains nothing. Mostly meant for SIP addresses, which
+are stored as `user@domain` without a `sip:` scheme:
+
+    sip_dst ~ "9070000205"
+    sip_src ~ "001010000000204" && sevana_mos < 3.8
+
+### SIP calls list filter (`/ui/sip-calls`, `GET /sip_calls?filter=`)
+
+The same language over one row per Call-ID (`filter.SipCallNameMap`):
+
+| field | meaning |
+|---|---|
+| `caller`, `callee`, `call_id` | SIP addresses (`user@domain`) and Call-ID |
+| `start_time` | call start, Unix **seconds** (as in the streams filter) |
+| `duration` | **ms** |
+| `code` | SIP response code: the failure code, else the setup code (200) |
+| `status` | `"established"`, `"failed"` or `"unknown"` |
+| `reinvites` | number of re-INVITE / UPDATE events |
+| `sevana_mos`, `network_mos` | worst finished RTP stream of the call; Sevana counts only streams PVQA analysed, and is 0 when none was |
+
+`sevana_mos == 0` means "not analysed by PVQA", for streams and calls alike (a
+stream PVQA skipped is stored with 0). So `sevana_mos < x` also matches those;
+use `sevana_mos > 0 && sevana_mos < x` for analysed but poor ones.
+
+    sevana_mos == 0                                   # no PVQA
+    callee ~ "9070000205" && sevana_mos > 0 && sevana_mos < 3.8
+    status == "failed" || code >= 400
+    network_mos < 4 && duration > 25000

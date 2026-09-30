@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/sevana-ou/vq-db/internal/db"
@@ -184,6 +185,20 @@ func TestSipCalls(t *testing.T) {
 	c0 := calls[0].(map[string]any)
 	if c0["call_id"] != "c1" || c0["outcome"] != "established" {
 		t.Errorf("call = %v", c0)
+	}
+}
+
+func TestSipCallsFilter(t *testing.T) {
+	app := seededApp(t)
+	for expr, want := range map[string]float64{`status == "established"`: 1, `callee ~ "nobody"`: 0} {
+		code, body := getJSON(t, app, "/sip_calls?filter="+url.QueryEscape(expr))
+		if code != 200 || body["total_calls_count"].(float64) != want || len(body["calls"].([]any)) != int(want) {
+			t.Errorf("%s: code %d, body %v", expr, code, body)
+		}
+	}
+	code, body := getJSON(t, app, "/sip_calls?filter="+url.QueryEscape("foo > 1"))
+	if code != 200 || body["error"] == nil || len(body["calls"].([]any)) != 0 {
+		t.Errorf("bad filter: code %d, body %v", code, body)
 	}
 }
 

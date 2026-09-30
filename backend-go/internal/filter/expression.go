@@ -38,7 +38,7 @@ type Token struct {
 }
 
 var twoCharOps = map[string]bool{"<=": true, ">=": true, "==": true, "!=": true, "&&": true, "||": true}
-var oneCharOps = map[byte]bool{'+': true, '-': true, '*': true, '/': true, '<': true, '>': true}
+var oneCharOps = map[byte]bool{'+': true, '-': true, '*': true, '/': true, '<': true, '>': true, '~': true}
 
 func isIdentStart(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
@@ -301,6 +301,10 @@ func (b BinOp) ToSQL(nameMap map[string]string, dialect string) (SQLFragment, er
 	params = append(params, left.Params...)
 	params = append(params, right.Params...)
 	text := "(" + left.Text + " " + sqlOp[b.Op] + " " + right.Text + ")"
+	if b.Op == "~" {
+		// case-insensitive substring; instr() is SQLite (the only wired engine)
+		text = "(instr(lower(CAST(" + left.Text + " AS TEXT)), lower(" + right.Text + ")) > 0)"
+	}
 	if dialect == "numeric" {
 		text = renumber(text)
 	}
@@ -356,6 +360,8 @@ func (b BinOp) Evaluate(values map[string]any) (any, error) {
 	switch b.Op {
 	case "+", "-", "*", "/":
 		return arith(b.Op, left, right)
+	case "~":
+		return containsFold(left, right), nil
 	default:
 		return compare(b.Op, left, right)
 	}
@@ -367,7 +373,7 @@ func (b BinOp) Evaluate(values map[string]any) (any, error) {
 
 var bindingPower = map[string]int{
 	"||": 1, "&&": 2,
-	"==": 3, "!=": 3,
+	"==": 3, "!=": 3, "~": 3,
 	"<": 4, "<=": 4, ">": 4, ">=": 4,
 	"+": 5, "-": 5,
 	"*": 6, "/": 6,
@@ -615,6 +621,15 @@ func compare(op string, left, right any) (bool, error) {
 		return ls >= rs, nil
 	}
 	return false, exprErr("unknown operator %q", op)
+}
+
+// containsFold is the "~" operator: the right operand, as text, occurs in the
+// left one, ignoring case. A missing (nil) value contains nothing.
+func containsFold(left, right any) bool {
+	if left == nil || right == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(pyStr(left)), strings.ToLower(pyStr(right)))
 }
 
 // coercePair mirrors Python _coerce_pair: two numbers -> both float; two strings

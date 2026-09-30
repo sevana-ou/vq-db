@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -248,12 +249,23 @@ func (a *App) sipCalls(w http.ResponseWriter, r *http.Request) {
 	callID := r.URL.Query().Get("call_id")
 	start := queryIntOpt(r, "start_timestamp")
 	end := queryIntOpt(r, "end_timestamp")
-	count, err := GetSipCallCount(a.deps.DB, start, end, callID)
+	expr := r.URL.Query().Get("filter")
+	count, err := GetSipCallCount(a.deps.DB, start, end, callID, expr)
+	var exprErr *filter.ExpressionError
+	if errors.As(err, &exprErr) {
+		// like /stats: a bad filter is a 200 with an error and no calls
+		body := a.envelope()
+		body["total_calls_count"] = 0
+		body["calls"] = []map[string]any{}
+		body["error"] = err.Error()
+		writeJSON(w, http.StatusOK, body)
+		return
+	}
 	if err != nil {
 		httpError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	list, err := GetSipCallList(a.deps.DB, start, end, limit, offset, callID)
+	list, err := GetSipCallList(a.deps.DB, start, end, limit, offset, callID, expr)
 	if err != nil {
 		httpError(w, http.StatusServiceUnavailable, err.Error())
 		return

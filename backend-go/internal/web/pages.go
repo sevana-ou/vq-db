@@ -348,11 +348,12 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 	if limit <= 0 || limit > 500 {
 		limit = 25
 	}
-	data := map[string]any{}
-	count, err := api.GetSipCallCount(a.deps.DB, nil, nil, "")
+	expr := strings.TrimSpace(q.Get("q"))
+	data := map[string]any{"Filter": expr, "Sevana": a.showSevana()}
+	count, err := api.GetSipCallCount(a.deps.DB, nil, nil, "", expr)
 	if err != nil {
 		data["Error"] = err.Error()
-	} else if list, err := api.GetSipCallList(a.deps.DB, nil, nil, limit, offset, ""); err != nil {
+	} else if list, err := api.GetSipCallList(a.deps.DB, nil, nil, limit, offset, "", expr); err != nil {
 		data["Error"] = err.Error()
 	} else {
 		rows := make([]map[string]any, 0, len(list))
@@ -382,7 +383,6 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 		}
 		data["Rows"] = rows
 		data["Total"] = count
-		data["Sevana"] = a.showSevana()
 		mk := func(o, l int) string {
 			vals := url.Values{}
 			if o != 0 {
@@ -390,6 +390,9 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 			}
 			if l != 25 {
 				vals.Set("limit", strconv.Itoa(l))
+			}
+			if expr != "" {
+				vals.Set("q", expr)
 			}
 			u := base + "/ui/sip-calls"
 			if enc := vals.Encode(); enc != "" {

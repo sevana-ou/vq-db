@@ -3,6 +3,12 @@
   <h1>SIP calls</h1>
 </div>
 <div class="card">
+  <form class="toolbar" method="get" action="{{.Base}}/ui/sip-calls">
+    <input class="grow" type="text" name="q" value="{{.Data.Filter}}"
+           placeholder="Filter (e.g. callee ~ &#34;9070000205&#34; &amp;&amp; {{if .Data.Sevana}}sevana_mos{{else}}network_mos{{end}} &lt; 3.8)">
+    <button type="submit" class="primary">Apply</button>
+    {{if .Data.Filter}}<a class="btn" href="{{.Base}}/ui/sip-calls">Reset</a>{{end}}
+  </form>
   <div id="table" hx-get="{{.SelfURL}}" hx-trigger="every 10s" hx-swap="innerHTML">
 {{template "table" .}}
   </div>

@@ -418,3 +418,35 @@ func TestPyReprFloat(t *testing.T) {
 		}
 	}
 }
+
+func TestSQLContains(t *testing.T) {
+	frag := mustWhere(t, `sip_dst ~ "9070000205" && sevana_mos < 3.8`, "qmark")
+	want := "((instr(lower(CAST(rtpmon_streams.sip_destination AS TEXT)), lower(?)) > 0) AND (rtpmon_statistics.sevana_mos < 3.8))"
+	if frag.Text != want {
+		t.Errorf("text = %q", frag.Text)
+	}
+	if len(frag.Params) != 1 || frag.Params[0] != "9070000205" {
+		t.Errorf("params = %v", frag.Params)
+	}
+}
+
+func TestEvaluateContains(t *testing.T) {
+	vals := map[string]any{"sip_dst": "9070000205@IMS.example", "src_port": int64(40000), "sip_callid": nil}
+	cases := []struct {
+		expr string
+		want bool
+	}{
+		{`sip_dst ~ "9070000205"`, true},
+		{`sip_dst ~ "ims.EXAMPLE"`, true}, // case-insensitive
+		{`sip_dst ~ "9070000201"`, false},
+		{`sip_dst ~ ""`, true},
+		{`src_port ~ "400"`, true}, // numbers match as text
+		{`sip_callid ~ "x"`, false}, // missing value
+		{`sip_dst ~ "9070000205" && src_port == 40000`, true},
+	}
+	for _, c := range cases {
+		if got := EvaluateStream(c.expr, vals); got != c.want {
+			t.Errorf("%s = %v, want %v", c.expr, got, c.want)
+		}
+	}
+}

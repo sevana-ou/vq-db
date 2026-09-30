@@ -93,10 +93,9 @@ func GetAgentList(db *sql.DB) ([]map[string]any, error) {
 	return out, nil
 }
 
-// GetSipCallList returns per-Call-ID summaries.
-func GetSipCallList(db *sql.DB, startMs, endMs Int64Opt, limit, offset int, callID string) ([]Row, error) {
-	where, args := sipEventWhere(nil, startMs, endMs, callID)
-	query := "select call_id," +
+// sipCallAggregate is one row per Call-ID over rtpmon_sip_events.
+func sipCallAggregate(where string) string {
+	return "select call_id," +
 		" max(case when event_type in (1,4) then caller end) as caller," +
 		" max(case when event_type in (1,4) then callee end) as callee," +
 		" max(case when event_type=1 then event_timestamp end) as start_timestamp," +
@@ -110,8 +109,34 @@ func GetSipCallList(db *sql.DB, startMs, endMs Int64Opt, limit, offset int, call
 		" max(case when event_type=4 then 1 else 0 end) as failed," +
 		" max(event_timestamp) as last_ts" +
 		" from rtpmon_sip_events" + where +
-		" group by call_id order by last_ts desc limit ? offset ?"
-	args = append(args, limit, offset)
+		" group by call_id"
+}
+
+// sipCallFilter compiles a SIP calls filter expression ("" = none) into a
+// condition over the aggregate row "c".
+func sipCallFilter(expr string) (string, []any, error) {
+	if strings.TrimSpace(expr) == "" {
+		return "", nil, nil
+	}
+	frag, err := filter.BuildSipCallWhere(expr, "qmark")
+	if err != nil {
+		return "", nil, err
+	}
+	return " where " + frag.Text, frag.Params, nil
+}
+
+// GetSipCallList returns per-Call-ID summaries, newest first. expr is a SIP
+// calls filter expression (filter.SipCallNameMap), "" for all calls; a bad
+// expression returns a *filter.ExpressionError.
+func GetSipCallList(db *sql.DB, startMs, endMs Int64Opt, limit, offset int, callID, expr string) ([]Row, error) {
+	where, args := sipEventWhere(nil, startMs, endMs, callID)
+	cond, condArgs, err := sipCallFilter(expr)
+	if err != nil {
+		return nil, err
+	}
+	query := "select * from (" + sipCallAggregate(where) + ") c" + cond +
+		" order by c.last_ts desc limit ? offset ?"
+	args = append(append(args, condArgs...), limit, offset)
 	rows, err := queryRows(db, query, args...)
 	if err != nil {
 		return nil, err
@@ -126,11 +151,19 @@ func GetSipCallList(db *sql.DB, startMs, endMs Int64Opt, limit, offset int, call
 	return rows, nil
 }
 
-// GetSipCallCount returns the number of distinct calls matching the window.
-func GetSipCallCount(db *sql.DB, startMs, endMs Int64Opt, callID string) (int, error) {
+// GetSipCallCount returns the number of calls matching the window and expr.
+func GetSipCallCount(db *sql.DB, startMs, endMs Int64Opt, callID, expr string) (int, error) {
 	where, args := sipEventWhere(nil, startMs, endMs, callID)
+	cond, condArgs, err := sipCallFilter(expr)
+	if err != nil {
+		return 0, err
+	}
 	var n int
-	err := db.QueryRow("select count(distinct call_id) from rtpmon_sip_events"+where, args...).Scan(&n)
+	if cond == "" {
+		err = db.QueryRow("select count(distinct call_id) from rtpmon_sip_events"+where, args...).Scan(&n)
+		return n, err
+	}
+	err = db.QueryRow("select count(*) from ("+sipCallAggregate(where)+") c"+cond, append(args, condArgs...)...).Scan(&n)
 	return n, err
 }
 

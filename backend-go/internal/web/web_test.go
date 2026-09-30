@@ -1,8 +1,10 @@
 package web
 
 import (
+	"html"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -427,5 +429,67 @@ func TestSevanaShownForPvqaEngineAndByOverride(t *testing.T) {
 	app := withSnapshot(t, "Server v1.9.1 / PVQA v1.8.2", "off")
 	if _, body := get(t, app, "/ui/streams", nil); strings.Contains(body, "Sevana MOS") {
 		t.Error("sevana-mos: off still shows the Sevana MOS column")
+	}
+}
+
+func TestSipCallsFilter(t *testing.T) {
+	app := seededApp(t) // one call c1: sip:a@h -> sip:b@h, 20 s, 200, Sevana 3.70, network 4.00
+	cases := []struct {
+		expr string
+		hit  bool
+	}{
+		{`callee ~ "B@H"`, true},
+		{`caller ~ "zzz"`, false},
+		{`status == "established" && sevana_mos < 3.8`, true},
+		{`sevana_mos < 3.6`, false},
+		{`sevana_mos == 0`, false}, // analysed by PVQA
+		{`sevana_mos > 0`, true},
+		{`network_mos >= 4 && code == 200 && duration >= 20000`, true},
+		{`status == "failed" || code >= 400`, false},
+		{`call_id == "c1"`, true},
+	}
+	for _, c := range cases {
+		code, body := get(t, app, "/ui/sip-calls?q="+url.QueryEscape(c.expr), nil)
+		if code != 200 {
+			t.Fatalf("%s: code %d", c.expr, code)
+		}
+		if got := strings.Contains(body, "/ui/sip-call/c1"); got != c.hit {
+			t.Errorf("%s: call listed = %v, want %v", c.expr, got, c.hit)
+		}
+		if !strings.Contains(body, `value="`+html.EscapeString(c.expr)+`"`) {
+			t.Errorf("%s: filter box lost the expression", c.expr)
+		}
+	}
+	_, body := get(t, app, "/ui/sip-calls?q="+url.QueryEscape("foo > 1"), nil)
+	if !strings.Contains(body, "error-banner") {
+		t.Error("bad SIP calls filter shows no error")
+	}
+	// a call none of whose streams PVQA analysed has sevana_mos 0, like a stream
+	app.deps.DB.Exec(`UPDATE rtpmon_statistics SET sevana_mos = 0`)
+	for expr, hit := range map[string]bool{`sevana_mos == 0`: true, `sevana_mos > 0`: false} {
+		if _, body := get(t, app, "/ui/sip-calls?q="+url.QueryEscape(expr), nil); strings.Contains(body, "/ui/sip-call/c1") != hit {
+			t.Errorf("no PVQA: %s: call listed = %v, want %v", expr, !hit, hit)
+		}
+	}
+	_, body = get(t, app, "/ui/sip-calls?q="+url.QueryEscape("foo > 1"), nil)
+	if !strings.Contains(body, "error-banner") || !strings.Contains(body, "unknown filter field") {
+		t.Error("bad SIP calls filter shows no error")
+	}
+	// the pager keeps the filter
+	_, body = get(t, app, "/ui/sip-calls?limit=10&q="+url.QueryEscape(`callee ~ "b"`), nil)
+	if !strings.Contains(body, "q=callee") {
+		t.Error("pager links drop the filter")
+	}
+}
+
+func TestStreamsFilterContains(t *testing.T) {
+	app := seededApp(t)
+	_, body := get(t, app, "/ui/streams?f_q="+url.QueryEscape(`sip_dst ~ "B@H"`), nil)
+	if !strings.Contains(body, "/ui/stream/lnk-1") {
+		t.Error(`sip_dst ~ "B@H" does not list the stream`)
+	}
+	_, body = get(t, app, "/ui/streams?f_q="+url.QueryEscape(`sip_dst ~ "nobody"`), nil)
+	if strings.Contains(body, "/ui/stream/lnk-1") {
+		t.Error(`sip_dst ~ "nobody" still lists the stream`)
 	}
 }
