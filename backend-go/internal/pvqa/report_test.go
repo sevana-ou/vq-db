@@ -84,6 +84,26 @@ func TestDecomposeAggregatesMultiple(t *testing.T) {
 	}
 }
 
+// PVQA 1.9 inserts Noise at column 2, shifting DeadAir right. Counts must
+// follow the detector name, not the column.
+const reportNoise = "Time; SNR; Noise; DeadAir; Status\n" +
+	"0.00:0.68; 0.00; 0.50 !; 0.90 !; Poor\n"
+
+func TestDecomposeDifferentDetectorLists(t *testing.T) {
+	d := Decompose([]string{report, reportNoise})
+	want := map[string]int{"SNR": 1, "Noise": 1, "DeadAir": 1}
+	if !reflect.DeepEqual(detectorMap(d), want) {
+		t.Errorf("detectors = %v, want %v", detectorMap(d), want)
+	}
+	var names []string
+	for _, dc := range d.Detectors {
+		names = append(names, dc.Name)
+	}
+	if !reflect.DeepEqual(names, []string{"SNR", "DeadAir", "Noise"}) {
+		t.Errorf("order = %v", names)
+	}
+}
+
 func TestDecomposeAllGoodIs100(t *testing.T) {
 	good := "Time; SNR; Status\r\n0.00:0.68; 0.00; Normal\r\n"
 	d := Decompose([]string{good})

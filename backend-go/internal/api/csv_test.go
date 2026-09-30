@@ -66,3 +66,29 @@ func TestActiveCSVEmpty(t *testing.T) {
 		t.Errorf("got %q", out)
 	}
 }
+
+// Streams analysed under different PVQA configs: the old one has SNR;DeadAir,
+// PVQA 1.9 inserts Noise before DeadAir. Each count must land under its own
+// detector's header, and a detector a stream did not run stays empty.
+func TestActiveCSVMixedDetectorLists(t *testing.T) {
+	const newReport = "Time; SNR; Noise; DeadAir; Status\r\n" +
+		"0.00:0.68; 0.00; 0.40 !; 0.90 !; Poor\r\n"
+	out := ActiveCSV([]Row{
+		activeRecord(nil),
+		activeRecord(Row{"link_id": "lnk-2", "detector_reports": []string{newReport}}),
+	}, true)
+	lines := csvLines(out)
+	header := strings.Split(lines[0], ",")
+	if got := strings.Join(header[len(BasicHeaders):], ","); got != "SNR,DeadAir,Noise" {
+		t.Fatalf("detector header = %q", got)
+	}
+	for i, want := range []string{"1,0,", "0,1,1"} {
+		row := strings.Split(lines[i+1], ",")
+		if len(row) != len(header) {
+			t.Errorf("row %d has %d cells, header %d", i, len(row), len(header))
+		}
+		if got := strings.Join(row[len(BasicHeaders):], ","); got != want {
+			t.Errorf("row %d detectors = %q, want %q", i, got, want)
+		}
+	}
+}

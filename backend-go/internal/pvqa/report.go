@@ -128,25 +128,26 @@ func ParseIntervalReport(text string) ParsedReport {
 }
 
 // Decompose aggregates detector trigger counts and the R-factor across one or
-// more interval reports.
+// more interval reports. Counts are keyed by detector name, not by column, so
+// reports whose detector lists differ (a PVQA config change adds or reorders
+// detectors) still add up per detector. Detectors keep first-seen order.
 func Decompose(texts []string) Decomposition {
-	var detectorList []string
-	var counters []int
+	var detectors []DetectorCount
+	index := map[string]int{}
 	intervals := 0
 	poor := 0
 
 	for _, text := range texts {
 		parsed := ParseIntervalReport(text)
-		if len(parsed.DetectorList) > 0 && len(detectorList) == 0 {
-			detectorList = append([]string(nil), parsed.DetectorList...)
-			counters = make([]int, len(detectorList))
-		}
-		// Grow if a later report has more detectors than the first.
-		if len(parsed.DetectorList) > len(counters) {
-			for len(counters) < len(parsed.DetectorList) {
-				counters = append(counters, 0)
+		slots := make([]int, len(parsed.DetectorList))
+		for i, name := range parsed.DetectorList {
+			slot, ok := index[name]
+			if !ok {
+				slot = len(detectors)
+				index[name] = slot
+				detectors = append(detectors, DetectorCount{Name: name})
 			}
-			detectorList = append(detectorList, parsed.DetectorList[len(detectorList):]...)
+			slots[i] = slot
 		}
 
 		for _, row := range parsed.Rows {
@@ -154,20 +155,13 @@ func Decompose(texts []string) Decomposition {
 			if row.Poor {
 				poor++
 				for idx, value := range row.Values {
-					if value > 0.001 && idx < len(counters) {
-						counters[idx]++
+					if value > 0.001 && idx < len(slots) {
+						detectors[slots[idx]].Count++
 					}
 				}
 			}
 		}
 	}
 
-	detectors := make([]DetectorCount, 0, len(detectorList))
-	for i := range detectorList {
-		if i >= len(counters) {
-			break
-		}
-		detectors = append(detectors, DetectorCount{Name: detectorList[i], Count: counters[i]})
-	}
 	return Decomposition{Detectors: detectors, Intervals: intervals, PoorIntervals: poor}
 }

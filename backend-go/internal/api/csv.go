@@ -73,19 +73,46 @@ func BasicFromFinished(row Row) []string {
 	}
 }
 
-func renderCSV(streams [][2][]string, detailed bool, detectorNames []string) string {
+// csvStream is one exported stream: its basic cells and, for a detailed
+// export, its detector decomposition.
+type csvStream struct {
+	basic     []string
+	detectors []pvqa.DetectorCount
+}
+
+// renderCSV writes the CSV. Detector columns are the union of every stream's
+// detector names in first-seen order, and each stream's counts are placed by
+// name: streams analysed under different PVQA configs have different detector
+// lists, so position alone would put counts under the wrong header. A stream
+// that did not run a detector leaves that cell empty.
+func renderCSV(streams []csvStream, detailed bool) string {
+	var detectorNames []string
+	column := map[string]int{}
+	if detailed {
+		for _, s := range streams {
+			for _, dc := range s.detectors {
+				if _, ok := column[dc.Name]; !ok {
+					column[dc.Name] = len(detectorNames)
+					detectorNames = append(detectorNames, dc.Name)
+				}
+			}
+		}
+	}
+
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
 	w.UseCRLF = true
 	header := append([]string(nil), BasicHeaders...)
-	if detailed {
-		header = append(header, detectorNames...)
-	}
+	header = append(header, detectorNames...)
 	w.Write(header)
 	for _, s := range streams {
-		row := append([]string(nil), s[0]...)
+		row := append([]string(nil), s.basic...)
 		if detailed {
-			row = append(row, s[1]...)
+			det := make([]string, len(detectorNames))
+			for _, dc := range s.detectors {
+				det[column[dc.Name]] = strconv.Itoa(dc.Count)
+			}
+			row = append(row, det...)
 		}
 		w.Write(row)
 	}
@@ -105,11 +132,9 @@ func FinishedCSV(db *sql.DB, flt filter.SearchFilter, detailed bool) (string, er
 	if err != nil {
 		return "", err
 	}
-	var detectorNames []string
-	var out [][2][]string
+	var out []csvStream
 	for _, row := range rows {
-		basic := BasicFromFinished(row)
-		var det []string
+		s := csvStream{basic: BasicFromFinished(row)}
 		if detailed {
 			history, err := GetStreamHistory(db, getStr(row, "link_id"))
 			if err != nil {
@@ -119,44 +144,26 @@ func FinishedCSV(db *sql.DB, flt filter.SearchFilter, detailed bool) (string, er
 			for i, h := range history {
 				texts[i] = getStr(h, "detector_report")
 			}
-			decomp := pvqa.Decompose(texts)
-			if len(detectorNames) == 0 && len(decomp.Detectors) > 0 {
-				for _, dc := range decomp.Detectors {
-					detectorNames = append(detectorNames, dc.Name)
-				}
-			}
-			for _, dc := range decomp.Detectors {
-				det = append(det, strconv.Itoa(dc.Count))
-			}
+			s.detectors = pvqa.Decompose(texts).Detectors
 		}
-		out = append(out, [2][]string{basic, det})
+		out = append(out, s)
 	}
-	return renderCSV(out, detailed, detectorNames), nil
+	return renderCSV(out, detailed), nil
 }
 
 // ActiveCSV renders the active-stream records as CSV.
 func ActiveCSV(records []Row, detailed bool) string {
-	var detectorNames []string
-	var out [][2][]string
+	var out []csvStream
 	for _, rec := range records {
-		basic := basicFromActive(rec)
-		var det []string
+		s := csvStream{basic: basicFromActive(rec)}
 		if detailed {
 			var texts []string
 			if reports, ok := rec["detector_reports"].([]string); ok {
 				texts = reports
 			}
-			decomp := pvqa.Decompose(texts)
-			if len(detectorNames) == 0 && len(decomp.Detectors) > 0 {
-				for _, dc := range decomp.Detectors {
-					detectorNames = append(detectorNames, dc.Name)
-				}
-			}
-			for _, dc := range decomp.Detectors {
-				det = append(det, strconv.Itoa(dc.Count))
-			}
+			s.detectors = pvqa.Decompose(texts).Detectors
 		}
-		out = append(out, [2][]string{basic, det})
+		out = append(out, s)
 	}
-	return renderCSV(out, detailed, detectorNames)
+	return renderCSV(out, detailed)
 }
