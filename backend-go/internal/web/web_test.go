@@ -201,7 +201,9 @@ func TestSipCallsPageRenders(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("code %d", code)
 	}
-	for _, want := range []string{"SIP Calls : 1", "sip:a@h", "/ui/sip-call/c1", "Ok"} {
+	// the call's stream MOS: Sevana 3.70 and network 4.00 from the final report
+	for _, want := range []string{"SIP Calls : 1", "sip:a@h", "/ui/sip-call/c1", "Ok",
+		"Sevana MOS", "Network MOS", ">3.70<", ">4.00<", "worst of 1/1 streams: 3.70"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sip calls page missing %q", want)
 		}
@@ -295,6 +297,19 @@ func TestMosView(t *testing.T) {
 	}
 }
 
+func TestWorstMos(t *testing.T) {
+	if worstMos(nil, 4) != nil {
+		t.Error("no values must render no pill")
+	}
+	p := worstMos([]float64{3.88, 3.77, 4.1}, 4)
+	if p.Text != "3.77" || p.Band != "fair" {
+		t.Errorf("worstMos = %+v", p)
+	}
+	if want := "Fair - worst of 3/4 streams: 3.88, 3.77, 4.10"; p.Label != want {
+		t.Errorf("label = %q, want %q", p.Label, want)
+	}
+}
+
 func TestFormatHelpers(t *testing.T) {
 	if got := fmtInt(int64(1234567)); got != "1,234,567" {
 		t.Errorf("fmtInt = %s", got)
@@ -359,7 +374,7 @@ func TestCopyJSONPrefersJsonReport(t *testing.T) {
 }
 
 // sevanaPages are the pages that show Sevana MOS figures when PVQA is present.
-var sevanaPages = []string{"/ui/summary", "/ui/streams", "/ui/stream/lnk-1", "/ui/chunk/lnk-1/11000", "/ui/sip-call/c1", "/ui/core", "/ui/track"}
+var sevanaPages = []string{"/ui/summary", "/ui/streams", "/ui/stream/lnk-1", "/ui/chunk/lnk-1/11000", "/ui/sip-calls", "/ui/sip-call/c1", "/ui/core", "/ui/track"}
 
 // withSnapshot returns the seeded app with vq-core reporting version and the
 // dashboard.sevana-mos mode.

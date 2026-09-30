@@ -21,7 +21,8 @@
   <table>
     <thead><tr>
       <th class="num">#</th><th>Caller</th><th>Callee</th><th>Start time</th>
-      <th>Duration</th><th>Status</th><th>Code</th><th>Details</th>
+      <th>Duration</th>{{if .Sevana}}<th title="Worst RTP stream of the call">Sevana MOS</th>{{end}}
+      <th title="Worst RTP stream of the call">Network MOS</th><th>Status</th><th>Code</th><th>Details</th>
     </tr></thead>
     <tbody>
       {{$off := .Offset}}
@@ -32,6 +33,8 @@
         <td class="clip wide" title="{{$row.callee}}">{{$row.callee}}</td>
         <td>{{sipTime $row.start_timestamp}}</td>
         <td class="num">{{sipDur $row.duration}}</td>
+        {{if $.Data.Sevana}}<td>{{template "mos-pill" $row.sevana_mos}}</td>{{end}}
+        <td>{{template "mos-pill" $row.network_mos}}</td>
         <td>{{if eq $row.outcome "established"}}<span class="chip positive">Ok</span>
             {{- else if eq $row.outcome "failed"}}<span class="chip danger">Failed</span>
             {{- else}}<span class="chip neutral">Unknown</span>{{end}}</td>

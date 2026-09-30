@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sevana-ou/vq-db/internal/api"
@@ -355,11 +356,33 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 		data["Error"] = err.Error()
 	} else {
 		rows := make([]map[string]any, 0, len(list))
+		ids := make([]string, 0, len(list))
 		for _, s := range list {
-			rows = append(rows, api.SipCallSummaryToJSON(s))
+			row := api.SipCallSummaryToJSON(s)
+			rows = append(rows, row)
+			ids = append(ids, rawString(row["call_id"]))
+		}
+		// MOS of each call's RTP streams (finished ones), shown as the worst stream.
+		if mos, err := api.GetSipCallStreamMos(a.deps.DB, ids); err != nil {
+			data["Error"] = err.Error()
+		} else {
+			for _, row := range rows {
+				streams := mos[rawString(row["call_id"])]
+				sevana := make([]float64, 0, len(streams))
+				network := make([]float64, 0, len(streams))
+				for _, m := range streams {
+					if m.SevanaMos > 0 {
+						sevana = append(sevana, m.SevanaMos)
+					}
+					network = append(network, m.NetworkMos)
+				}
+				row["sevana_mos"] = worstMos(sevana, len(streams))
+				row["network_mos"] = worstMos(network, len(streams))
+			}
 		}
 		data["Rows"] = rows
 		data["Total"] = count
+		data["Sevana"] = a.showSevana()
 		mk := func(o, l int) string {
 			vals := url.Values{}
 			if o != 0 {
@@ -378,6 +401,24 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 		data["Pager"] = buildPager(offset, limit, len(rows), count, mk)
 	}
 	a.render(w, r, "sip_calls.html", pageData{Nav: "sip-calls", Title: "SIP calls", Data: data})
+}
+
+// worstMos is the MOS pill of a call: its worst stream, with every stream's
+// value in the tooltip. streams counts all of the call's streams, including
+// ones without a value (not analysed by PVQA). Nil when there is no value.
+func worstMos(vals []float64, streams int) *mosPill {
+	if len(vals) == 0 {
+		return nil
+	}
+	worst := vals[0]
+	parts := make([]string, len(vals))
+	for i, v := range vals {
+		worst = min(worst, v)
+		parts[i] = strconv.FormatFloat(v, 'f', 2, 64)
+	}
+	p := mosView(worst, false)
+	p.Label = fmt.Sprintf("%s - worst of %d/%d streams: %s", p.Label, len(vals), streams, strings.Join(parts, ", "))
+	return p
 }
 
 // sipCode mirrors the Flutter _codeText: setup code, else "code (reason)".
