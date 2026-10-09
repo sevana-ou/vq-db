@@ -154,6 +154,9 @@ func (w *Writer) RemoveOldRecords(cutoffMs int64) (st CleanupStats, err error) {
 	if _, err := w.exec("DELETE FROM rtpmon_call_health WHERE event_timestamp < ?", cutoffMs); err != nil {
 		return st, err
 	}
+	if _, err := w.exec("DELETE FROM rtpmon_alarm_events WHERE event_timestamp < ?", cutoffMs); err != nil {
+		return st, err
+	}
 	return st, nil
 }
 

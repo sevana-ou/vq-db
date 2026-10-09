@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -16,10 +17,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
 
+	"github.com/sevana-ou/vq-db/internal/alarm"
 	"github.com/sevana-ou/vq-db/internal/api"
 	"github.com/sevana-ou/vq-db/internal/bus"
 	"github.com/sevana-ou/vq-db/internal/config"
@@ -131,6 +134,8 @@ func run() int {
 	}
 	subscriber := bus.SubscriberForPort(cfg.ZeroMQPort, pipeline.OnBytes, onIdle)
 
+	alarms, alarmCommands := buildAlarms(cfg, conn)
+
 	deps := api.Deps{
 		DB:                    conn,
 		AgentID:               cfg.AgentID,
@@ -171,6 +176,9 @@ func run() int {
 	if trackSync != nil {
 		trackSync.Start()
 	}
+	if alarms != nil {
+		alarms.Start(alarmCheckEvery)
+	}
 
 	server := &http.Server{
 		Addr:    net.JoinHostPort(cfg.DashboardHost, strconv.Itoa(cfg.DashboardPort)),
@@ -204,6 +212,10 @@ func run() int {
 	}
 	if trackSync != nil {
 		trackSync.Stop()
+	}
+	if alarms != nil {
+		alarms.Stop()
+		alarmCommands.Close()
 	}
 	if control != nil {
 		control.Close()
@@ -263,4 +275,35 @@ func loadDetectorThresholds(path string) {
 	}
 	pvqa.SetDefaultThresholds(thresholds)
 	slog.Info("detector thresholds loaded", "pvqa_config", path, "detectors", len(thresholds))
+}
+
+// alarmCheckEvery is how often the alarm rules are evaluated.
+const alarmCheckEvery = 10 * time.Second
+
+// buildAlarms validates the configured alarm rules and builds their engine;
+// nil when none is configured. An invalid rule is logged and skipped, so one
+// typo does not take the dashboard down.
+func buildAlarms(cfg *config.Config, conn *sql.DB) (*alarm.Engine, *alarm.CommandNotifier) {
+	var rules []alarm.Rule
+	for _, c := range cfg.Alarms {
+		r, err := alarm.NewRule(c)
+		if err != nil {
+			slog.Error("alarm rule ignored", "err", err)
+			continue
+		}
+		rules = append(rules, r)
+	}
+	if len(rules) == 0 {
+		return nil, nil
+	}
+	diskPath := ""
+	if driver, dsn, err := db.SOCIToDSN(cfg.DBEngine, cfg.DBConnection); err == nil && driver == db.DriverSQLite && dsn != ":memory:" {
+		diskPath = filepath.Dir(dsn)
+	}
+	commands := alarm.NewCommandNotifier(time.Minute)
+	engine := alarm.NewEngine(rules, alarm.DBSource{DB: conn, DiskPath: diskPath},
+		alarm.Instance{ID: cfg.AgentID, Name: cfg.AgentName},
+		alarm.StoreNotifier{DB: conn}, commands)
+	slog.Info("alarms configured", "rules", len(rules), "every", alarmCheckEvery)
+	return engine, commands
 }

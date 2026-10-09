@@ -66,6 +66,18 @@ var createTableStmts = []string{
 		stream_count INTEGER,
 		warnings TEXT
 	)`,
+	// Alarm state changes (internal/alarm), for the dashboard and the API.
+	`CREATE TABLE IF NOT EXISTS rtpmon_alarm_events (
+		id INTEGER PRIMARY KEY,
+		name VARCHAR(256) NOT NULL,
+		kind VARCHAR(16) NOT NULL,
+		counter VARCHAR(64) NOT NULL,
+		op VARCHAR(8) NOT NULL,
+		value FLOAT,
+		limit_value FLOAT,
+		samples INTEGER,
+		event_timestamp INTEGER NOT NULL
+	)`,
 	`CREATE TABLE IF NOT EXISTS rtpmon_audio (
 		id INTEGER PRIMARY KEY,
 		stream_id INTEGER NOT NULL,
@@ -97,6 +109,7 @@ var createIndexStmts = []string{
 	`CREATE INDEX IF NOT EXISTS idx_sip_events_event_type ON rtpmon_sip_events (event_type)`,
 	`CREATE INDEX IF NOT EXISTS idx_call_health_call_id ON rtpmon_call_health (call_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_call_health_event_timestamp ON rtpmon_call_health (event_timestamp)`,
+	`CREATE INDEX IF NOT EXISTS idx_alarm_events_event_timestamp ON rtpmon_alarm_events (event_timestamp)`,
 	`CREATE INDEX IF NOT EXISTS idx_audio_stream_id ON rtpmon_audio (stream_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_audio_start_timestamp ON rtpmon_audio (start_timestamp)`,
 }

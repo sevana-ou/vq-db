@@ -287,3 +287,30 @@ func TestPvqaConfigPath(t *testing.T) {
 		t.Error("PvqaConfig should default to empty")
 	}
 }
+
+func TestParseAlarms(t *testing.T) {
+	doc := map[string]any{"alarm": []any{
+		map[string]any{"name": "low-r", "counter": "r_factor", "limit": 70, "interval": "1h",
+			"command": "./send_alarm.sh $r_factor $limit"},
+		map[string]any{"name": "loss", "counter": "packet_loss", "op": "Above", "limit": 2.5, "min-samples": 5,
+			"filter": `sip_dst ~ "x"`, "webhook": "https://h/x", "on-clear": true},
+		map[string]any{"name": "no-limit", "counter": "jitter"},
+		"not a mapping",
+	}}
+	a := parse(doc).Alarms
+	if len(a) != 3 {
+		t.Fatalf("alarms = %+v", a)
+	}
+	if a[0].IntervalS != 3600 || a[0].Limit != 70 || !a[0].HasLimit || a[0].Command != "./send_alarm.sh $r_factor $limit" {
+		t.Errorf("legacy entry = %+v", a[0])
+	}
+	if a[1].Op != "above" || a[1].Limit != 2.5 || a[1].MinSamples != 5 || a[1].Webhook != "https://h/x" || !a[1].OnClear || a[1].Filter == "" {
+		t.Errorf("new keys = %+v", a[1])
+	}
+	if a[2].HasLimit {
+		t.Errorf("missing limit read as set: %+v", a[2])
+	}
+	if parse(map[string]any{}).Alarms != nil {
+		t.Error("no alarm block should give no alarms")
+	}
+}

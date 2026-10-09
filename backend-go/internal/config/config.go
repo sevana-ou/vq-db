@@ -73,6 +73,9 @@ type Config struct {
 	// of these substrings (case-insensitive); empty = store every call.
 	StoreSipFilter []string
 
+	// Alarms: the top-level `alarm:` list (see AlarmConfig).
+	Alarms []AlarmConfig
+
 	// Logging
 	LogLevel   string
 	LogFile    string
@@ -342,6 +345,7 @@ func parse(doc any) *Config {
 	cfg.CSVPath = asString(nestedGet(doc, "database", "csv"))
 	cfg.RecordsLimit = asInt(nestedGet(doc, "database", "records-limit"), 0)
 	cfg.StoreSipFilter = asStringSlice(nestedGet(doc, "database", "store-sip-filter"))
+	cfg.Alarms = parseAlarms(nestedGet(doc, "alarm"))
 
 	if v := nestedGet(doc, "logging", "level"); v != nil {
 		cfg.LogLevel = asString(v)
@@ -350,4 +354,56 @@ func parse(doc any) *Config {
 	cfg.LogConsole = asBool(nestedGet(doc, "logging", "console"), false)
 
 	return &cfg
+}
+
+// AlarmConfig is one entry of the top-level `alarm:` list, as written. The
+// alarm package validates it and applies the defaults (internal/alarm.NewRule).
+// name, counter, limit, interval and command are the keys the C++ vq-db
+// documented; the others were added with the Go implementation.
+type AlarmConfig struct {
+	Name       string
+	Counter    string
+	Op         string  // "below" | "above"; empty = the counter's default
+	Limit      float64 // HasLimit tells a missing limit from 0
+	HasLimit   bool
+	IntervalS  int // window the counter is measured over, and the repeat period
+	MinSamples int
+	Filter     string // stream (or call) filter expression, as on the dashboard
+	Code       string // call_health: the warning code to count; empty = any
+	Command    string
+	Webhook    string
+	OnClear    bool // also run the command when the alarm clears
+}
+
+// parseAlarms reads the `alarm:` list. Entries that are not mappings are
+// skipped; validation happens in the alarm package.
+func parseAlarms(v any) []AlarmConfig {
+	list, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	var out []AlarmConfig
+	for _, item := range list {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		a := AlarmConfig{
+			Name:       asString(m["name"]),
+			Counter:    strings.TrimSpace(asString(m["counter"])),
+			Op:         strings.ToLower(strings.TrimSpace(asString(m["op"]))),
+			IntervalS:  ParseDurationSeconds(m["interval"]),
+			MinSamples: asInt(m["min-samples"], 0),
+			Filter:     asString(m["filter"]),
+			Code:       strings.TrimSpace(asString(m["code"])),
+			Command:    asString(m["command"]),
+			Webhook:    strings.TrimSpace(asString(m["webhook"])),
+			OnClear:    asBool(m["on-clear"], false),
+		}
+		if lv, ok := m["limit"]; ok && lv != nil {
+			a.Limit, a.HasLimit = asFloat(lv, 0), true
+		}
+		out = append(out, a)
+	}
+	return out
 }
