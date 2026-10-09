@@ -35,7 +35,7 @@ import (
 // version is the vq-db backend's own version. It is a var (not a const) so the
 // build can stamp the real version via -ldflags "-X main.version=…" (see
 // scripts/build_bundle.py); the default here tracks backend-go/VERSION.
-var version = "2.1.9"
+var version = "2.2.0"
 
 func main() {
 	os.Exit(run())
