@@ -114,6 +114,10 @@ func sipCallAggregate(where string) string {
 		" group by call_id"
 }
 
+// SipCallAggregate is sipCallAggregate for other packages (the alarms): one
+// row per Call-ID from the SIP events matching where (" where ..." or "").
+func SipCallAggregate(where string) string { return sipCallAggregate(where) }
+
 // sipCallFilter compiles a SIP calls filter expression ("" = none) into a
 // condition over the aggregate row "c".
 func sipCallFilter(expr string) (string, []any, error) {

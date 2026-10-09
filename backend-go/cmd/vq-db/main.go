@@ -116,12 +116,17 @@ func run() int {
 		trackSync = worker.NewTrackSyncWorker(trackStore, control, time.Duration(cfg.TrackResyncIntervalS)*time.Second)
 	}
 
+	alarms := buildAlarms(cfg, conn)
+
 	registry := state.NewActiveStreamRegistry(cfg.AgentID, cfg.AgentName)
 	snapshot := state.NewInstanceSnapshot()
 	pipeline := ingest.NewPipeline(writer, registry, func(s model.InstanceStatistics) {
 		snapshot.Set(s)
 		if trackSync != nil {
 			trackSync.NoteUptime(s.UptimeSeconds)
+		}
+		if alarms != nil {
+			alarms.drops.Note(s)
 		}
 	})
 
@@ -133,8 +138,6 @@ func run() int {
 		onIdle = sweeper.Tick
 	}
 	subscriber := bus.SubscriberForPort(cfg.ZeroMQPort, pipeline.OnBytes, onIdle)
-
-	alarms, alarmCommands := buildAlarms(cfg, conn)
 
 	deps := api.Deps{
 		DB:                    conn,
@@ -177,7 +180,7 @@ func run() int {
 		trackSync.Start()
 	}
 	if alarms != nil {
-		alarms.Start(alarmCheckEvery)
+		alarms.engine.Start(alarmCheckEvery)
 	}
 
 	server := &http.Server{
@@ -214,8 +217,9 @@ func run() int {
 		trackSync.Stop()
 	}
 	if alarms != nil {
-		alarms.Stop()
-		alarmCommands.Close()
+		alarms.engine.Stop()
+		alarms.commands.Close()
+		alarms.webhooks.Close()
 	}
 	if control != nil {
 		control.Close()
@@ -280,11 +284,20 @@ func loadDetectorThresholds(path string) {
 // alarmCheckEvery is how often the alarm rules are evaluated.
 const alarmCheckEvery = 10 * time.Second
 
+// alarmSet is the alarm engine and the workers it notifies.
+type alarmSet struct {
+	engine   *alarm.Engine
+	commands *alarm.CommandNotifier
+	webhooks *alarm.WebhookNotifier
+	drops    *alarm.DropHistory
+}
+
 // buildAlarms validates the configured alarm rules and builds their engine;
 // nil when none is configured. An invalid rule is logged and skipped, so one
 // typo does not take the dashboard down.
-func buildAlarms(cfg *config.Config, conn *sql.DB) (*alarm.Engine, *alarm.CommandNotifier) {
+func buildAlarms(cfg *config.Config, conn *sql.DB) *alarmSet {
 	var rules []alarm.Rule
+	longest := time.Duration(0)
 	for _, c := range cfg.Alarms {
 		r, err := alarm.NewRule(c)
 		if err != nil {
@@ -292,18 +305,23 @@ func buildAlarms(cfg *config.Config, conn *sql.DB) (*alarm.Engine, *alarm.Comman
 			continue
 		}
 		rules = append(rules, r)
+		longest = max(longest, r.Window)
 	}
 	if len(rules) == 0 {
-		return nil, nil
+		return nil
 	}
 	diskPath := ""
 	if driver, dsn, err := db.SOCIToDSN(cfg.DBEngine, cfg.DBConnection); err == nil && driver == db.DriverSQLite && dsn != ":memory:" {
 		diskPath = filepath.Dir(dsn)
 	}
-	commands := alarm.NewCommandNotifier(time.Minute)
-	engine := alarm.NewEngine(rules, alarm.DBSource{DB: conn, DiskPath: diskPath},
+	set := &alarmSet{
+		commands: alarm.NewCommandNotifier(time.Minute),
+		webhooks: alarm.NewWebhookNotifier("vq-db/" + version),
+		drops:    alarm.NewDropHistory(longest + time.Minute),
+	}
+	set.engine = alarm.NewEngine(rules, &alarm.DBSource{DB: conn, DiskPath: diskPath, Drops: set.drops},
 		alarm.Instance{ID: cfg.AgentID, Name: cfg.AgentName},
-		alarm.StoreNotifier{DB: conn}, commands)
+		alarm.StoreNotifier{DB: conn}, set.commands, set.webhooks)
 	slog.Info("alarms configured", "rules", len(rules), "every", alarmCheckEvery)
-	return engine, commands
+	return set
 }
