@@ -138,10 +138,12 @@ construction (the writer lives on the bus goroutine).
   `/streamhistory` and the CSV export. A detector counts for an interval when
   its cell carries " !" or its value is above that detector's `IntThresh` from
   `pvqa.cfg` (loaded at startup via `pvqa.config`, `pvqa.SetDefaultThresholds`),
-  whatever the interval's status. Detectors with no threshold keep the legacy
-  rule (> 0.001 in a Poor interval). PVQA 1.9 writes no " !" marks, so without
-  `pvqa.config` the legacy rule over-counts and a silent stream (never rated
-  Poor) shows no counters at all.
+  whatever the interval's status. Detectors that `pvqa.cfg` runs with
+  `PVQA-Flag: no` (Noise, PacketLoss, SilentCall, the v2 frame detectors) only
+  feed the MOS model, read high on clean audio, and are left out of the
+  counters. Detectors `pvqa.cfg` does not list keep the legacy rule (> 0.001
+  in a Poor interval). PVQA 1.9 writes no " !" marks, so without `pvqa.config`
+  the legacy rule over-counts every detector.
 - `internal/worker/` — background workers assembled in `main.go`: `CleanupWorker`
   (record/audio lifetime retention), `TrackSyncWorker` (re-applies persisted
   track patterns if vq-core restarts), and `GhostSweeper` (finalizes ghosts on

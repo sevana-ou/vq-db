@@ -129,7 +129,11 @@ const reportV2 = "Time; SilentCall; PacketLoss; Echo; Custom; Status\n" +
 	"0.68:1.36; 0.971; 0.400; 0.120; 0.00; Poor\n" +
 	"1.36:2.04; 1.000; 0.900; 0.000; 0.00; Ok\n"
 
-var v2Thresholds = Thresholds{"SilentCall": 0.99, "PacketLoss": 0.5, "Echo": 0.0}
+var v2Thresholds = Thresholds{
+	"SilentCall": {IntThresh: 0.99, Flagged: true},
+	"PacketLoss": {IntThresh: 0.5, Flagged: true},
+	"Echo":       {IntThresh: 0.0, Flagged: true},
+}
 
 func TestDecomposeWithThresholds(t *testing.T) {
 	d := DecomposeWith([]string{reportV2}, v2Thresholds)
@@ -155,7 +159,7 @@ func TestDecomposeWithoutThresholdsKeepsLegacyRule(t *testing.T) {
 
 func TestDecomposeMarkAlwaysTriggers(t *testing.T) {
 	text := "Time; SNR; Status\n0.00:0.68; 0.05 !; Normal\n"
-	if got := detectorMap(DecomposeWith([]string{text}, Thresholds{"SNR": 0.1})); got["SNR"] != 1 {
+	if got := detectorMap(DecomposeWith([]string{text}, Thresholds{"SNR": {IntThresh: 0.1, Flagged: true}})); got["SNR"] != 1 {
 		t.Errorf("marked cell below threshold: SNR = %d, want 1", got["SNR"])
 	}
 }
@@ -165,5 +169,18 @@ func TestDecomposeUsesDefaultThresholds(t *testing.T) {
 	defer SetDefaultThresholds(nil)
 	if got := detectorMap(Decompose([]string{reportV2})); got["SilentCall"] != 2 {
 		t.Errorf("SilentCall = %d, want 2", got["SilentCall"])
+	}
+}
+
+func TestDecomposeSkipsUnflaggedDetectors(t *testing.T) {
+	th := Thresholds{
+		"SilentCall": {IntThresh: 0.99},
+		"PacketLoss": {IntThresh: 0.5},
+		"Echo":       {IntThresh: 0.0, Flagged: true},
+	}
+	// Model-only detectors are left out of the list, not shown with a count.
+	want := map[string]int{"Echo": 1, "Custom": 0}
+	if got := detectorMap(DecomposeWith([]string{reportV2}, th)); !reflect.DeepEqual(got, want) {
+		t.Errorf("counts = %v, want %v", got, want)
 	}
 }

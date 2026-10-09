@@ -3,7 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"github.com/sevana-ou/vq-db/internal/pvqa"
 )
 
 func TestParseDuration(t *testing.T) {
@@ -228,10 +231,12 @@ Detector:
   - Name:                 Echo
     DetectorType:         EchoMono
     IntThresh:            0.0
+    PVQA-Flag:            true
 
   - Name:                 SilentCall
     DetectorType:         DeadAir
     IntThresh:            0.99
+    PVQA-Flag:            no
 
   - Name:                 NoThreshold
     DetectorType:         Custom
@@ -249,14 +254,13 @@ func TestLoadDetectorThresholds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]float64{"SNR": 0.10, "Echo": 0.0, "SilentCall": 0.99}
-	if len(got) != len(want) {
-		t.Fatalf("got %v, want %v", got, want)
+	want := pvqa.Thresholds{
+		"SNR":        {IntThresh: 0.10, Flagged: true},
+		"Echo":       {IntThresh: 0.0, Flagged: true},
+		"SilentCall": {IntThresh: 0.99, Flagged: false},
 	}
-	for k, v := range want {
-		if g, ok := got[k]; !ok || g != v {
-			t.Errorf("%s = %v (present %v), want %v", k, g, ok, v)
-		}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 

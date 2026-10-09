@@ -9,9 +9,10 @@
 // A detector cell whose value triggered the interval carries a trailing " !".
 // Decomposition: a detector's counter is the number of intervals it triggered
 // in. A cell triggers when it carries "!", or when its value is above the
-// detector's IntThresh from pvqa.cfg (see Thresholds). A detector with no known
-// threshold falls back to the legacy rule: value > 0.001 in a row whose status
-// is exactly "Poor". The R-factor is int((intervals - poor) / intervals * 100),
+// detector's IntThresh from pvqa.cfg (see Thresholds). Detectors pvqa.cfg runs
+// with PVQA-Flag no are left out: they only feed the MOS model. A detector
+// pvqa.cfg does not list falls back to the legacy rule: value > 0.001 in a row
+// whose status is exactly "Poor". The R-factor is int((intervals - poor) / intervals * 100),
 // clamped to <= 100.
 package pvqa
 
@@ -28,13 +29,24 @@ type Row struct {
 	Marked []bool // cell carried the " !" trigger mark
 }
 
-// Thresholds maps a detector name to its pvqa.cfg IntThresh: the fraction of
-// flagged frames above which the detector triggers for an interval.
+// Detector is one pvqa.cfg detector entry, as far as counting goes.
+type Detector struct {
+	// IntThresh is the fraction of flagged frames above which the detector
+	// triggers for an interval.
+	IntThresh float64
+	// Flagged is PVQA-Flag: the detector takes part in PVQA's interval vote.
+	// Unflagged detectors (Noise, PacketLoss, SilentCall, the v2 frame
+	// detectors) only feed the MOS model; their IntThresh values are
+	// placeholders and they read high on clean audio, so they are not counted.
+	Flagged bool
+}
+
+// Thresholds maps a detector name to its pvqa.cfg entry.
 //
 // PVQA 1.9 no longer writes the " !" mark, and its frame detectors report a
 // fraction for every interval, so without thresholds the legacy rule counts
 // nearly every detector in every Poor interval, clean calls included.
-type Thresholds map[string]float64
+type Thresholds map[string]Detector
 
 var defaultThresholds atomic.Pointer[Thresholds]
 
@@ -196,6 +208,12 @@ func DecomposeWith(texts []string, thresholds Thresholds) Decomposition {
 		limits := make([]float64, len(parsed.DetectorList))
 		known := make([]bool, len(parsed.DetectorList))
 		for i, name := range parsed.DetectorList {
+			det, isKnown := thresholds[name]
+			if isKnown && !det.Flagged {
+				slots[i] = -1 // model feature, not counted
+				continue
+			}
+			limits[i], known[i] = det.IntThresh, isKnown
 			slot, ok := index[name]
 			if !ok {
 				slot = len(detectors)
@@ -203,7 +221,6 @@ func DecomposeWith(texts []string, thresholds Thresholds) Decomposition {
 				detectors = append(detectors, DetectorCount{Name: name})
 			}
 			slots[i] = slot
-			limits[i], known[i] = thresholds[name]
 		}
 
 		for _, row := range parsed.Rows {
@@ -212,7 +229,7 @@ func DecomposeWith(texts []string, thresholds Thresholds) Decomposition {
 				poor++
 			}
 			for idx := range row.Values {
-				if idx < len(slots) && triggered(row, idx, limits[idx], known[idx]) {
+				if idx < len(slots) && slots[idx] >= 0 && triggered(row, idx, limits[idx], known[idx]) {
 					detectors[slots[idx]].Count++
 				}
 			}

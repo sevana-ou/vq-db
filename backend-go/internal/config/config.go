@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/sevana-ou/vq-db/internal/pvqa"
 )
 
 // Defaults mirror the C++ server_settings.h.
@@ -262,9 +264,9 @@ func Load(path string) (*Config, error) {
 }
 
 // LoadDetectorThresholds reads the Detector list of a pvqa.cfg and returns each
-// detector's IntThresh by name. Detectors without IntThresh are left out, so
-// they keep the legacy counting rule.
-func LoadDetectorThresholds(path string) (map[string]float64, error) {
+// detector's IntThresh and PVQA-Flag by name. Detectors without IntThresh are
+// left out, so they keep the legacy counting rule.
+func LoadDetectorThresholds(path string) (pvqa.Thresholds, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -275,19 +277,36 @@ func LoadDetectorThresholds(path string) (map[string]float64, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	out := map[string]float64{}
+	out := pvqa.Thresholds{}
 	for _, d := range doc.Detector {
 		name := asString(d["Name"])
 		v, ok := d["IntThresh"]
 		if name == "" || !ok {
 			continue
 		}
-		out[name] = asFloat(v, 0)
+		out[name] = pvqa.Detector{IntThresh: asFloat(v, 0), Flagged: pvqaFlag(d["PVQA-Flag"])}
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("%s: no detector IntThresh values found", path)
 	}
 	return out, nil
+}
+
+// pvqaFlag reads a PVQA-Flag value. PVQA requires it on every detector, and
+// shipped configs use both yes/no (strings to yaml.v3) and true/false.
+func pvqaFlag(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		switch strings.ToLower(strings.TrimSpace(t)) {
+		case "yes", "true", "on", "1":
+			return true
+		}
+	case int:
+		return t != 0
+	}
+	return false
 }
 
 // parse builds a Config from a decoded YAML document (map[string]any tree).

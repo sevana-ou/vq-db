@@ -229,7 +229,7 @@ If `stream_id` is missing the server returns HTTP `503` with `{"error":"Param st
 }
 ```
 
-Top-level fields describe the whole stream; `chunks[]` lists the per-interval reports in chronological order. Detector counters (`Dead_Air`, `Click`, `SNR`, …) are flat keys at the top level — the field name is the detector name with spaces replaced by underscores, the value is the number of intervals that triggered the detector: its value was above the detector's `IntThresh` in the `pvqa.cfg` named by `pvqa.config` (or the cell was marked " !"). Without `pvqa.config`, a detector counts in every Poor interval where its value is non-zero. `json_report` carries the full internal report and is intended for debugging — most clients can ignore it.
+Top-level fields describe the whole stream; `chunks[]` lists the per-interval reports in chronological order. Detector counters (`Dead_Air`, `Click`, `SNR`, …) are flat keys at the top level — the field name is the detector name with spaces replaced by underscores, the value is the number of intervals that triggered the detector: its value was above the detector's `IntThresh` in the `pvqa.cfg` named by `pvqa.config` (or the cell was marked " !"). Only detectors with `PVQA-Flag: yes` in that file are listed; the others only feed the MOS model. Without `pvqa.config`, every detector is listed and counts in each Poor interval where its value is non-zero. `json_report` carries the full internal report and is intended for debugging — most clients can ignore it.
 
 ### `GET /report` — single interval report
 
