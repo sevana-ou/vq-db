@@ -86,3 +86,22 @@ database:
     #   connection: "dbname=vqmonitor host=localhost user=vq password=secret"
     # NOTE: the Go build currently wires only the SQLite driver; enable the
     # pg/mysql drivers in internal/db/open.go before using those engines.
+
+# Threshold alarms (docs/vq_db_api.md, "Alarms"): each rule measures a counter
+# over a window every 10 s and runs a shell command and/or POSTs a webhook when
+# it crosses the limit (again once per window while it stays bad, and on
+# recovery for webhooks / `on-clear: true` commands). State and history are on
+# the dashboard's Alarms page and at GET /alarms.
+#alarm:
+#    - name:        low-network-mos
+#      counter:     network_mos          # network_mos sevana_mos r_factor packet_loss jitter duration
+#      limit:       3.6                  # silent_streams call_health failed_calls capture_drops free_disk_space
+#      interval:    15m
+#      min-samples: 5
+#      command:     /opt/alarms/notify.sh $network_mos $limit
+#    - name:        one-way-calls
+#      counter:     call_health
+#      code:        one_way_audio
+#      limit:       10                   # % of the window's calls
+#      interval:    1h
+#      webhook:     https://hooks.example.com/vq

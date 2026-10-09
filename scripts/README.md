@@ -63,6 +63,12 @@ database:
   connection: "db=/opt/vq-monitor-db-go/data/vq-monitor.sqlite"
   records-lifetime: 7d
   audio-lifetime: 1d
+alarm:                          # optional threshold alarms (docs/vq_db_api.md, "Alarms")
+  - name: low-network-mos
+    counter: network_mos
+    limit: 3.6
+    interval: 15m
+    command: /opt/alarms/notify.sh $network_mos $limit   # and/or webhook: https://...
 ```
 
 Postgres/MySQL: set `engine: postgresql` / `mysql` and a SOCI-style `connection`

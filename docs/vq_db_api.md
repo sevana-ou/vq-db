@@ -582,6 +582,92 @@ dashboard:
   good-mos-threshold: 3.6   # streams at or above this MOS count as "good"
 ```
 
+## Alarms
+
+vq-db evaluates threshold alarms over the data it stores and notifies a shell command and/or a webhook when a rule enters or leaves the alarm state. Rules are configured in the YAML (there is no API to change them), evaluated every 10 seconds from the database, so they survive restarts and cover every vq-core feeding this vq-db.
+
+```yaml
+alarm:
+  - name:        low-network-mos        # shown on the dashboard and in notifications
+    counter:     network_mos            # what to measure (table below)
+    limit:       3.6
+    interval:    15m                    # window the counter is measured over (default 15m)
+    op:          below                  # optional: below | above (default per counter)
+    min-samples: 5                      # optional: fewer samples in the window = no verdict (default 1)
+    filter:      'sip_dst ~ "@carrier-a"'   # optional: dashboard filter language (streams or SIP calls)
+    command:     /opt/alarms/notify.sh $network_mos $limit
+    webhook:     https://hooks.example.com/vq
+    on-clear:    true                   # optional: also run the command when the alarm clears
+  - name:        one-way-calls
+    counter:     call_health
+    code:        one_way_audio          # call_health only: count this warning only (default: any)
+    limit:       10                     # percent of the window's calls
+    interval:    1h
+    webhook:     https://hooks.example.com/vq
+```
+
+`name`, `counter`, `limit`, `interval` and `command` are the keys the C++ vq-db documented; existing configurations keep working. A rule needs a `limit` and at least one of `command` / `webhook`; an invalid rule is logged and skipped.
+
+| `counter`         | Measured over                       | Value                                                         | Default `op` | `filter` |
+| ----------------- | ----------------------------------- | ------------------------------------------------------------- | ------------ | -------- |
+| `network_mos`     | finished streams in the window      | average network MOS                                           | below        | streams  |
+| `sevana_mos`      | streams PVQA analysed               | average Sevana MOS                                            | below        | streams  |
+| `r_factor`        | streams PVQA analysed               | average Sevana R-factor                                       | below        | streams  |
+| `packet_loss`     | finished streams                    | lost / expected packets, %                                    | above        | streams  |
+| `jitter`          | finished streams                    | average jitter, ms                                            | above        | streams  |
+| `duration`        | finished streams                    | average stream duration, s                                    | below        | streams  |
+| `silent_streams`  | streams PVQA analysed               | % carrying only silence (the dashboard's 🔇 rule)             | above        | streams  |
+| `call_health`     | calls vq-core judged in the window  | % with a call-health warning (or with `code`)                 | above        | SIP calls |
+| `failed_calls`    | calls set up or failed in the window| % that failed                                                 | above        | SIP calls |
+| `capture_drops`   | vq-core's capture                   | packets dropped in the window (hardware/kernel + DPDK buffers) | above       | —        |
+| `free_disk_space` | the database's filesystem           | free share, 0..1                                              | below        | —        |
+
+Stream filters use the `/stats` grammar, SIP calls filters the `/sip_calls` one (`caller`, `callee`, `status`, …).
+
+**States.** A rule is *raised* when its value crosses the limit, notified again (*repeat*) once per `interval` while it stays bad, and *cleared* when it recovers. A window with fewer than `min-samples` samples keeps the current state (no traffic is not evidence either way); the dashboard shows it as *No data*.
+
+**Command.** Runs through `/bin/sh -c`, one at a time, with a 1 minute timeout, for raised and repeated events (and cleared ones with `on-clear: true`). The placeholders `$r_factor`, `$sevana_mos`, `$network_mos`, `$packet_loss`, `$jitter`, `$duration`, `$limit` and `$free_disk_space` are replaced by numbers (the window's averages under the rule's filter); a leading `~` is the home directory. Everything else comes as environment variables, never pasted into the command line: `VQ_ALARM_NAME`, `VQ_ALARM_STATE` (`alarm` / `repeat` / `cleared`), `VQ_ALARM_COUNTER`, `VQ_ALARM_VALUE`, `VQ_ALARM_OP`, `VQ_ALARM_LIMIT`, `VQ_ALARM_UNIT`, `VQ_ALARM_SAMPLES`, `VQ_ALARM_WINDOW_S`, `VQ_ALARM_FILTER`, `VQ_ALARM_CODE`, `VQ_ALARM_TIME` (RFC 3339), `VQ_INSTANCE_ID`, `VQ_INSTANCE_NAME`, and the window's KPIs `VQ_STREAMS`, `VQ_R_FACTOR`, `VQ_SEVANA_MOS`, `VQ_NETWORK_MOS`, `VQ_PACKET_LOSS`, `VQ_JITTER`, `VQ_DURATION`, `VQ_FREE_DISK_SPACE`.
+
+**Webhook.** A `POST` with `Content-Type: application/json` for raised, repeated and cleared events, retried once after 5 s on a network error or a non-2xx answer:
+
+```json
+{
+  "alarm": "low-network-mos", "state": "alarm", "counter": "network_mos",
+  "op": "below", "limit": 3.6, "unit": "MOS", "value": 2.91, "samples": 12,
+  "window_s": 900, "filter": "sip_dst ~ \"@carrier-a\"", "code": "",
+  "time": "2026-10-09T14:25:48Z", "timestamp_ms": 1791555948000,
+  "instance": { "id": "agent_1", "name": "First instance" },
+  "kpis": { "streams": 12, "sevana_streams": 0, "r_factor": 0, "sevana_mos": 0,
+            "network_mos": 2.91, "packet_loss": 6.2, "jitter": 31.5, "duration": 64.0 }
+}
+```
+
+### `GET /alarms` — alarm rules and recent state changes
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `limit`   | int  | `50`    | Number of recent events (1–1000). |
+
+```json
+{
+  "instance": { "id": "agent_1", "name": "First instance" },
+  "configured": true,
+  "rules": [
+    { "name": "low-network-mos", "counter": "network_mos", "op": "below", "limit": 3.6, "unit": "MOS",
+      "window_s": 900, "min_samples": 5, "filter": "sip_dst ~ \"@carrier-a\"", "code": "",
+      "notify": { "command": true, "webhook": true, "on_clear": true },
+      "state": "alarm", "value": 2.91, "samples": 12, "measured": true,
+      "last_check_ms": 1791555958000, "last_change_ms": 1791555948000, "error": "" }
+  ],
+  "events": [
+    { "name": "low-network-mos", "kind": "alarm", "counter": "network_mos", "op": "below",
+      "value": 2.91, "limit": 3.6, "samples": 12, "timestamp_ms": 1791555948000 }
+  ]
+}
+```
+
+`state` is `alarm`, `ok`, `no data` (too few samples in the window) or `pending` (not checked yet). Rules never include the command line or the webhook URL, which may carry tokens; `notify` only says which are configured. Events are kept for `database.records-lifetime`. The dashboard's **Alarms** page shows the same data.
+
 ## Data retention
 
 The data returned by the listing and detail endpoints (`/stats` finished list, `/streamhistory`, `/report`, and the SIP endpoints) is not kept forever. A background sweep (hourly) expires old data according to two independent lifetimes configured in the YAML; both default to `0`, which means **keep forever** (no sweeping). Durations accept a unit suffix — `7d`, `12h`, `30m`, `10200ms`, or a bare number (seconds).

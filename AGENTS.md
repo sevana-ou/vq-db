@@ -152,6 +152,18 @@ construction (the writer lives on the bus goroutine).
   from vq-core as `CallHealth` events: stored in `rtpmon_call_health` (one row
   per verdict, warnings as JSON), shown as ⚠ chips in the SIP calls list and on
   the call detail page, and returned as `health` by `/sip_calls` and `/sip_call`.
+- `internal/alarm/` — threshold alarms (the `alarm:` list, documented in
+  `docs/vq_db_api.md` "Alarms"): `rule.go` validates a rule and holds the
+  counters' default direction; `source.go` measures a rule from SQLite every
+  10 s (stream KPIs through the dashboard's filter SQL, silent streams via
+  `pvqa.SilentStream` cached per stream id, SIP call shares through
+  `api.SipCallAggregate`, capture drops from `drops.go`'s history of vq-core's
+  instance statistics); `engine.go` is the raise / repeat / clear state machine;
+  `command.go` (shell, numbers-only `$placeholders`, the rest as `VQ_ALARM_*`
+  env vars), `webhook.go` (JSON POST) and `store.go` (`rtpmon_alarm_events`)
+  are the notifiers. `api` reaches it only through `Deps.Alarms` (no import),
+  for `/alarms` and the dashboard's Alarms page. Never expose a rule's command
+  or webhook URL there.
 - `internal/worker/` — background workers assembled in `main.go`: `CleanupWorker`
   (record/audio lifetime retention), `TrackSyncWorker` (re-applies persisted
   track patterns if vq-core restarts: at once, when the uptime in vq-core's
@@ -161,7 +173,7 @@ construction (the writer lives on the bus goroutine).
 
 Config is the shared `vq-monitor.cfg` YAML (same file vq-core reads); only the
 `logging`, `server.instance`, `server.zeromq-*`, `server.track-resync-interval`,
-`server.ghost-stream-timeout`, `server.pidfile-db`, `pvqa.config`, `dashboard`, and `database`
+`server.ghost-stream-timeout`, `server.pidfile-db`, `pvqa.config`, `alarm`, `dashboard`, and `database`
 blocks are used (`internal/config/config.go`). Defaults: PUB bus 9125, control
 9127, dashboard 9126 (the Go bundle sample uses 9146 to coexist with earlier
 builds). The `dashboard` block also carries quality tuning: `good-mos-threshold`
