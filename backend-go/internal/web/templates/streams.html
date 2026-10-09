@@ -54,7 +54,7 @@
         <td class="num">{{raw $row.duration}}</td>
         {{if $sev}}<td>{{template "mos-pill" (mos $row.sevana_mos true)}}</td>{{end}}
         <td>{{template "mos-pill" (mos $row.network_mos false)}}
-            {{if $row.silence_suspected}}<span class="chip warning icon" title="Silence suspected {{pct0 $row.silence_ratio}}">🔇</span>{{end}}</td>
+            {{if $row.silence_suspected}}<span class="chip warning icon" title="{{silenceTip $row}}">🔇</span>{{end}}</td>
         <td class="num">{{raw $row.jitter}}</td>
         <td class="clip" title="{{$row.sip_src}}">{{$row.sip_src}}</td>
         <td class="clip" title="{{$row.sip_dst}}">{{$row.sip_dst}}</td>

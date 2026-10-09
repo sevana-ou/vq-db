@@ -238,3 +238,61 @@ func DecomposeWith(texts []string, thresholds Thresholds) Decomposition {
 
 	return Decomposition{Detectors: detectors, Intervals: intervals, PoorIntervals: poor}
 }
+
+// SilentCall is the pvqa.cfg detector that reads 1.0 on digital silence. It is
+// a model feature (PVQA-Flag no), so it is not a detector counter, but over a
+// whole stream it separates a silent direction from speech: on clean calls it
+// reads >= 0.99 in ordinary pauses only (about a quarter of the intervals).
+const SilentCall = "SilentCall"
+
+// Silent-stream rule: SilentCall at or above its IntThresh in at least
+// SilentStreamRatio of a stream's intervals, over at least SilentStreamMinIntervals
+// intervals (680 ms each, so about 5 s).
+const (
+	SilentStreamRatio        = 0.9
+	SilentStreamMinIntervals = 8
+	defaultSilentCallLevel   = 0.99
+)
+
+// SilentShare returns the share of intervals in which SilentCall reads at or
+// above its IntThresh (0.99 when no thresholds are loaded), and the number of
+// intervals that carry a SilentCall cell.
+func SilentShare(texts []string) (share float64, intervals int) {
+	level := defaultSilentCallLevel
+	if d, ok := DefaultThresholds()[SilentCall]; ok {
+		level = d.IntThresh
+	}
+	silent := 0
+	for _, text := range texts {
+		parsed := ParseIntervalReport(text)
+		col := -1
+		for i, name := range parsed.DetectorList {
+			if name == SilentCall {
+				col = i
+				break
+			}
+		}
+		if col < 0 {
+			continue
+		}
+		for _, row := range parsed.Rows {
+			if col >= len(row.Values) {
+				continue
+			}
+			intervals++
+			if row.Values[col] >= level {
+				silent++
+			}
+		}
+	}
+	if intervals == 0 {
+		return 0, 0
+	}
+	return float64(silent) / float64(intervals), intervals
+}
+
+// SilentStream reports whether a stream's reports read as silence throughout.
+func SilentStream(texts []string) (silent bool, share float64) {
+	share, n := SilentShare(texts)
+	return n >= SilentStreamMinIntervals && share >= SilentStreamRatio, share
+}

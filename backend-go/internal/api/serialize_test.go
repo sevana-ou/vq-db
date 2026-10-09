@@ -1,6 +1,9 @@
 package api
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestSipCallSummaryEstablished(t *testing.T) {
 	v := SipCallSummaryToJSON(Row{
@@ -213,5 +216,32 @@ func TestJitterAndRttRoundedTo3Decimals(t *testing.T) {
 	f := FinishedStreamRowToJSON(reportRow(Row{"jitter": 12.3456789}), DefaultSilenceRatioThreshold)
 	if f["jitter"] != 12.346 {
 		t.Errorf("jitter = %v", f["jitter"])
+	}
+}
+
+func silentCallReport(level string, n int) string {
+	text := "Time; SNR; SilentCall; Status\n"
+	for i := 0; i < n; i++ {
+		text += fmt.Sprintf("%d.00:%d.68; 0.000; %s; Ok\n", i, i, level)
+	}
+	return text
+}
+
+func TestSilenceFieldsSilentAudio(t *testing.T) {
+	// No DTX frames at all (digital silence sent as ordinary frames), but
+	// PVQA's SilentCall reads silence in every interval of the stream.
+	v := SilenceFields(Row{"dtx_total": int64(1148), "detector_report": silentCallReport("1.000", 35)}, DefaultSilenceRatioThreshold)
+	if v["silence_suspected"] != true || v["silence_source"] != "audio" || v["silent_audio_ratio"] != 1.0 {
+		t.Errorf("got %v", v)
+	}
+	// An active record carries one report per chunk.
+	v = SilenceFields(Row{"detector_reports": []string{silentCallReport("1.000", 5), silentCallReport("1.000", 5)}}, DefaultSilenceRatioThreshold)
+	if v["silence_suspected"] != true {
+		t.Errorf("active record: got %v", v)
+	}
+	// Speech: SilentCall only in pauses.
+	v = SilenceFields(Row{"detector_report": silentCallReport("0.200", 30) + "30.00:30.68; 0.000; 1.000; Ok\n"}, DefaultSilenceRatioThreshold)
+	if v["silence_suspected"] != false || v["silence_source"] != "" {
+		t.Errorf("speech: got %v", v)
 	}
 }

@@ -83,24 +83,25 @@ func (a *App) renderError(w http.ResponseWriter, r *http.Request, page string, s
 // ----- template funcs ----- //
 
 var funcs = template.FuncMap{
-	"mos":       mosView,
-	"fmtInt":    fmtInt,
-	"fmtBytes":  fmtBytes,
-	"fmtPct":    fmtPct,
-	"fmtUptime": fmtUptime,
-	"fmtF1":     fmtFixed(1),
-	"fmtF2":     fmtFixed(2),
-	"fmtF3":     fmtFixed(3),
-	"sipTime":   sipTime,
-	"sipDur":    sipDur,
-	"raw":       rawString,
-	"num":       toF64,
-	"i64":       toI64,
-	"add":       func(a, b int) int { return a + b },
-	"pct0":      pct0,
-	"queryEsc":  template.URLQueryEscaper,
-	"sipCode":   sipCode,
-	"dictCard":  func(p pageData, c cardView) map[string]any { return map[string]any{"P": p, "C": c} },
+	"mos":        mosView,
+	"fmtInt":     fmtInt,
+	"fmtBytes":   fmtBytes,
+	"fmtPct":     fmtPct,
+	"fmtUptime":  fmtUptime,
+	"fmtF1":      fmtFixed(1),
+	"fmtF2":      fmtFixed(2),
+	"fmtF3":      fmtFixed(3),
+	"sipTime":    sipTime,
+	"sipDur":     sipDur,
+	"raw":        rawString,
+	"num":        toF64,
+	"i64":        toI64,
+	"add":        func(a, b int) int { return a + b },
+	"pct0":       pct0,
+	"silenceTip": silenceTip,
+	"queryEsc":   template.URLQueryEscaper,
+	"sipCode":    sipCode,
+	"dictCard":   func(p pageData, c cardView) map[string]any { return map[string]any{"P": p, "C": c} },
 }
 
 // mosView drives the MOS pill. Nil result = render nothing.
@@ -310,4 +311,20 @@ func toF64(v any) float64 {
 		}
 	}
 	return 0
+}
+
+// silenceTip explains a stream's silence chip: which signal raised it.
+func silenceTip(row map[string]any) string {
+	src, _ := row["silence_source"].(string)
+	dtx := "DTX/SID frames " + pct0(row["silence_ratio"])
+	audio := "silent audio in " + pct0(row["silent_audio_ratio"]) + " of intervals (PVQA SilentCall)"
+	switch src {
+	case "dtx":
+		return "Silence suspected: " + dtx
+	case "audio":
+		return "Silence suspected: " + audio
+	case "dtx+audio":
+		return "Silence suspected: " + dtx + ", " + audio
+	}
+	return "Silence suspected"
 }

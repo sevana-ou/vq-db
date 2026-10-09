@@ -143,7 +143,12 @@ construction (the writer lives on the bus goroutine).
   feed the MOS model, read high on clean audio, and are left out of the
   counters. Detectors `pvqa.cfg` does not list keep the legacy rule (> 0.001
   in a Poor interval). PVQA 1.9 writes no " !" marks, so without `pvqa.config`
-  the legacy rule over-counts every detector.
+  the legacy rule over-counts every detector. `SilentStream` is the
+  stream-level silence alarm: SilentCall at or above its IntThresh in >= 90%
+  of at least 8 intervals (clean speech reads ~10-35%, pauses only). It feeds
+  `silence_suspected` alongside the DTX ratio (`silence_source`:
+  `dtx`/`audio`/`dtx+audio`, `silent_audio_ratio`), and the SIP calls list marks
+  a call "One-way silence" when some of its streams are silent and others not.
 - `internal/worker/` — background workers assembled in `main.go`: `CleanupWorker`
   (record/audio lifetime retention), `TrackSyncWorker` (re-applies persisted
   track patterns if vq-core restarts), and `GhostSweeper` (finalizes ghosts on

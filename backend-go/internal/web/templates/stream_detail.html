@@ -30,6 +30,9 @@
     <dt>DTX frames (silence / comfort-noise / total)</dt><dd>{{.DtxText}}</dd>
     <dt>Silence</dt><dd>{{.SilencePct}}{{if .SilenceSuspected}} <span class="chip warning">🔇 Silence suspected</span>{{end}}</dd>
     {{end}}
+    {{if .SilentAudioPct}}
+    <dt title="Share of intervals in which PVQA's SilentCall reads digital silence">Silent audio</dt><dd>{{.SilentAudioPct}} of intervals{{if .SilentAudio}} <span class="chip warning">🔇 Silent stream</span>{{end}}</dd>
+    {{end}}
     {{if $sev}}<dt>Sevana Rfactor</dt><dd>{{.Rfactor}}</dd>{{end}}
     <dt>SIP callid</dt><dd>{{if $d.sip_callid}}<a href="{{$base}}/ui/sip-call/{{queryEsc $d.sip_callid}}">{{$d.sip_callid}} ↗</a>{{end}}</dd>
     <dt>SIP destination</dt><dd>{{$d.sip_dst}}</dd>

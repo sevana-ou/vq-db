@@ -43,7 +43,9 @@
         <td>{{template "mos-pill" $row.network_mos}}</td>
         <td>{{if eq $row.outcome "established"}}<span class="chip positive">Ok</span>
             {{- else if eq $row.outcome "failed"}}<span class="chip danger">Failed</span>
-            {{- else}}<span class="chip neutral">Unknown</span>{{end}}</td>
+            {{- else}}<span class="chip neutral">Unknown</span>{{end}}
+            {{- if eq $row.silence "one-way"}} <span class="chip warning" title="One direction of the call carries only silence (PVQA SilentCall)">🔇 One-way silence</span>
+            {{- else if eq $row.silence "all"}} <span class="chip warning" title="Every stream of the call carries only silence (PVQA SilentCall)">🔇 Silent</span>{{end}}</td>
         <td>{{sipCode $row}}</td>
         <td>{{if $row.call_id}}<a href="{{$base}}/ui/sip-call/{{queryEsc $row.call_id}}" title="Details">↗</a>{{end}}</td>
       </tr>

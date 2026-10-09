@@ -53,6 +53,10 @@ func AgentEnvelope(agentID, agentName string) map[string]any {
 }
 
 // SilenceFields returns the DTX frame stats plus the derived silence signal.
+// Silence is suspected when DTX/SID frames make up at least threshold of the
+// stream, or when PVQA's SilentCall reads silence through the whole stream
+// (pvqa.SilentStream) - the case DTX misses, e.g. a sender that transmits
+// digital silence as ordinary frames.
 func SilenceFields(row Row, threshold float64) map[string]any {
 	sid := getI64(row, "dtx_sid")
 	count := getI64(row, "dtx_count")
@@ -61,13 +65,38 @@ func SilenceFields(row Row, threshold float64) map[string]any {
 	if total > 0 {
 		ratio = float64(sid+count) / float64(total)
 	}
-	return map[string]any{
-		"dtx_sid":           sid,
-		"dtx_count":         count,
-		"dtx_total":         total,
-		"silence_ratio":     round3(ratio),
-		"silence_suspected": total > 0 && ratio >= threshold,
+	dtxSilent := total > 0 && ratio >= threshold
+	silentAudio, audioRatio := pvqa.SilentStream(detectorReports(row))
+	source := ""
+	switch {
+	case dtxSilent && silentAudio:
+		source = "dtx+audio"
+	case dtxSilent:
+		source = "dtx"
+	case silentAudio:
+		source = "audio"
 	}
+	return map[string]any{
+		"dtx_sid":            sid,
+		"dtx_count":          count,
+		"dtx_total":          total,
+		"silence_ratio":      round3(ratio),
+		"silent_audio_ratio": round3(audioRatio),
+		"silence_suspected":  dtxSilent || silentAudio,
+		"silence_source":     source,
+	}
+}
+
+// detectorReports returns a row's PVQA interval reports: an active-stream
+// record carries one per chunk, a statistics row one for the whole stream.
+func detectorReports(row Row) []string {
+	if reports, ok := row["detector_reports"].([]string); ok {
+		return reports
+	}
+	if text := getStr(row, "detector_report"); text != "" {
+		return []string{text}
+	}
+	return nil
 }
 
 func detectorsJSON(d pvqa.Decomposition) []map[string]any {

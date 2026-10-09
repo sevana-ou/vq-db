@@ -493,3 +493,23 @@ func TestStreamsFilterContains(t *testing.T) {
 		t.Error(`sip_dst ~ "nobody" still lists the stream`)
 	}
 }
+
+func TestCallSilence(t *testing.T) {
+	s := func(silent ...bool) []api.CallStreamMos {
+		out := []api.CallStreamMos{}
+		for _, v := range silent {
+			out = append(out, api.CallStreamMos{Silent: v})
+		}
+		return out
+	}
+	cases := map[string][]api.CallStreamMos{"": s(false, false), "one-way": s(false, true), "all": s(true, true)}
+	cases[""] = append(cases[""], s()...)
+	for want, streams := range cases {
+		if got := callSilence(streams); got != want {
+			t.Errorf("callSilence(%v) = %q, want %q", streams, got, want)
+		}
+	}
+	if callSilence(nil) != "" {
+		t.Error("no streams: want empty")
+	}
+}

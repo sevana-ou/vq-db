@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sevana-ou/vq-db/internal/filter"
+	"github.com/sevana-ou/vq-db/internal/pvqa"
 )
 
 // queryRows runs a query and returns each row as a Row (map[string]any), with
@@ -168,11 +169,13 @@ func GetSipCallCount(db *sql.DB, startMs, endMs Int64Opt, callID, expr string) (
 }
 
 // CallStreamMos is the final MOS of one finished stream of a SIP call.
-// SevanaMos is 0 when PVQA did not analyse the stream.
+// SevanaMos is 0 when PVQA did not analyse the stream. Silent is
+// pvqa.SilentStream over the stream's final report.
 type CallStreamMos struct {
 	StreamID   int64
 	SevanaMos  float64
 	NetworkMos float64
+	Silent     bool
 }
 
 // GetSipCallStreamMos returns the finished streams' MOS of the given calls,
@@ -187,7 +190,8 @@ func GetSipCallStreamMos(db *sql.DB, callIDs []string) (map[string][]CallStreamM
 		args[i] = id
 	}
 	query := "select s.sip_callid as call_id, s.stream_id as stream_id," +
-		" max(t.sevana_mos) as sevana_mos, max(t.network_mos) as network_mos" +
+		" max(t.sevana_mos) as sevana_mos, max(t.network_mos) as network_mos," +
+		" max(t.detector_report) as detector_report" +
 		" from rtpmon_streams s join rtpmon_statistics t on t.stream_id = s.stream_id" +
 		" where s.sip_callid in (?" + strings.Repeat(",?", len(callIDs)-1) + ")" +
 		" group by s.stream_id order by s.stream_id"
@@ -197,10 +201,15 @@ func GetSipCallStreamMos(db *sql.DB, callIDs []string) (map[string][]CallStreamM
 	}
 	for _, r := range rows {
 		id := getStr(r, "call_id")
+		silent := false
+		if text := getStr(r, "detector_report"); text != "" {
+			silent, _ = pvqa.SilentStream([]string{text})
+		}
 		out[id] = append(out[id], CallStreamMos{
 			StreamID:   getI64(r, "stream_id"),
 			SevanaMos:  getF64(r, "sevana_mos"),
 			NetworkMos: getF64(r, "network_mos"),
+			Silent:     silent,
 		})
 	}
 	return out, nil

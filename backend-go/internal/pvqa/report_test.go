@@ -1,6 +1,7 @@
 package pvqa
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -182,5 +183,48 @@ func TestDecomposeSkipsUnflaggedDetectors(t *testing.T) {
 	want := map[string]int{"Echo": 1, "Custom": 0}
 	if got := detectorMap(DecomposeWith([]string{reportV2}, th)); !reflect.DeepEqual(got, want) {
 		t.Errorf("counts = %v, want %v", got, want)
+	}
+}
+
+func silentReport(values ...string) string {
+	text := "Time; SNR; SilentCall; Status\n"
+	for i, v := range values {
+		text += fmt.Sprintf("%d.00:%d.68; 0.000; %s; Ok\n", i, i, v)
+	}
+	return text
+}
+
+func TestSilentStream(t *testing.T) {
+	ten := func(v string) []string {
+		out := make([]string, 10)
+		for i := range out {
+			out[i] = v
+		}
+		return out
+	}
+	// Silent throughout, split across two reports (an active stream's chunks).
+	if silent, share := SilentStream([]string{silentReport(ten("1.000")[:5]...), silentReport(ten("1.000")[:5]...)}); !silent || share != 1 {
+		t.Errorf("all silent: silent=%v share=%v", silent, share)
+	}
+	// Speech with pauses: 3 of 10 intervals silent.
+	speech := append(ten("0.200")[:7], "1.000", "1.000", "0.995")
+	if silent, share := SilentStream([]string{silentReport(speech...)}); silent || share != 0.3 {
+		t.Errorf("speech: silent=%v share=%v", silent, share)
+	}
+	// Too short to judge.
+	if silent, _ := SilentStream([]string{silentReport("1.000", "1.000", "1.000")}); silent {
+		t.Error("3 intervals should not be enough")
+	}
+	// No SilentCall column (older pvqa.cfg).
+	if silent, share := SilentStream([]string{report}); silent || share != 0 {
+		t.Errorf("no column: silent=%v share=%v", silent, share)
+	}
+}
+
+func TestSilentShareUsesConfiguredLevel(t *testing.T) {
+	SetDefaultThresholds(Thresholds{SilentCall: {IntThresh: 0.5}})
+	defer SetDefaultThresholds(nil)
+	if share, n := SilentShare([]string{silentReport("0.600", "0.400")}); n != 2 || share != 0.5 {
+		t.Errorf("share=%v n=%d", share, n)
 	}
 }

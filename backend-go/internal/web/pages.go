@@ -284,7 +284,11 @@ func (a *App) streamDetailPage(w http.ResponseWriter, r *http.Request) {
 	if toI64(d["dtx_total"]) > 0 {
 		data["DtxText"] = rawString(d["dtx_count"]) + " / " + rawString(d["dtx_sid"]) + " / " + rawString(d["dtx_total"])
 		data["SilencePct"] = pct0(d["silence_ratio"])
-		data["SilenceSuspected"] = d["silence_suspected"] == true
+		data["SilenceSuspected"] = strings.HasPrefix(rawString(d["silence_source"]), "dtx")
+	}
+	if toF64(d["sevana_mos"]) != 0 {
+		data["SilentAudioPct"] = pct0(d["silent_audio_ratio"])
+		data["SilentAudio"] = strings.HasSuffix(rawString(d["silence_source"]), "audio")
 	}
 	if list, ok := d["detectors"].([]map[string]any); ok && len(list) > 0 {
 		data["HasDetectors"] = true
@@ -379,6 +383,7 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 				}
 				row["sevana_mos"] = worstMos(sevana, len(streams))
 				row["network_mos"] = worstMos(network, len(streams))
+				row["silence"] = callSilence(streams)
 			}
 		}
 		data["Rows"] = rows
@@ -404,6 +409,25 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 		data["Pager"] = buildPager(offset, limit, len(rows), count, mk)
 	}
 	a.render(w, r, "sip_calls.html", pageData{Nav: "sip-calls", Title: "SIP calls", Data: data})
+}
+
+// callSilence classifies a call by its silent streams: "one-way" when some
+// directions carry only silence and others do not, "all" when every stream is
+// silent, "" otherwise.
+func callSilence(streams []api.CallStreamMos) string {
+	silent := 0
+	for _, m := range streams {
+		if m.Silent {
+			silent++
+		}
+	}
+	switch {
+	case silent == 0:
+		return ""
+	case silent < len(streams):
+		return "one-way"
+	}
+	return "all"
 }
 
 // worstMos is the MOS pill of a call: its worst stream, with every stream's
