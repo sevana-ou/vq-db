@@ -82,6 +82,16 @@ func (c *ControlClient) openSocket() error {
 	return nil
 }
 
+// Reconnect replaces the socket with a freshly dialled one. zmq4 does not
+// re-establish a REQ connection whose peer went away, so after vq-core restarts
+// the old socket would only time out; callers that know the peer restarted
+// reconnect first.
+func (c *ControlClient) Reconnect() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.openSocket()
+}
+
 // Close closes the underlying socket.
 func (c *ControlClient) Close() {
 	c.mu.Lock()

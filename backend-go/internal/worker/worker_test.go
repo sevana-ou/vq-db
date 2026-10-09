@@ -2,6 +2,8 @@ package worker
 
 import (
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"bytes"
@@ -231,5 +233,84 @@ func TestKickBeforeStartIsKept(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("kick before Start was lost")
+	}
+}
+
+// staleControl mimics zmq4 after vq-core restarted: the old socket never
+// replies until Reconnect redials it.
+type staleControl struct {
+	notifyControl
+	mu         sync.Mutex
+	stale      bool
+	reconnects int
+}
+
+func (s *staleControl) Send(op bus.TrackOp, patterns []string) bus.TrackAck {
+	s.mu.Lock()
+	stale := s.stale
+	s.mu.Unlock()
+	if stale {
+		return bus.TrackAck{Error: "control socket did not reply"}
+	}
+	return s.notifyControl.Send(op, patterns)
+}
+
+func (s *staleControl) Reconnect() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reconnects++
+	s.stale = false
+	return nil
+}
+
+func TestRestartReconnectsBeforeSync(t *testing.T) {
+	ctrl := &staleControl{stale: true, notifyControl: notifyControl{sent: make(chan bus.TrackOp, 8), acks: map[bus.TrackOp]bus.TrackAck{
+		bus.TrackQuery:   {TransportOK: true, OK: true, Current: []string{}},
+		bus.TrackReplace: {TransportOK: true, OK: true, Current: []string{"alice"}},
+	}}}
+	w := NewTrackSyncWorker(fakeStore{[]string{"alice"}}, ctrl, 0)
+	w.Start()
+	defer w.Stop()
+	w.NoteUptime(500)
+	w.NoteUptime(1)
+	for _, want := range []bus.TrackOp{bus.TrackQuery, bus.TrackReplace} {
+		select {
+		case op := <-ctrl.sent:
+			if op != want {
+				t.Fatalf("op = %v, want %v", op, want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("no %v after the restart", want)
+		}
+	}
+	ctrl.mu.Lock()
+	defer ctrl.mu.Unlock()
+	if ctrl.reconnects != 1 {
+		t.Errorf("reconnects = %d, want 1", ctrl.reconnects)
+	}
+}
+
+// unreachableControl never answers, whatever Reconnect does.
+type unreachableControl struct{ attempts atomic.Int32 }
+
+func (u *unreachableControl) Send(bus.TrackOp, []string) bus.TrackAck {
+	u.attempts.Add(1)
+	return bus.TrackAck{Error: "control socket did not reply"}
+}
+
+func (u *unreachableControl) Reconnect() error { return nil }
+
+func TestRestartRetriesWhileVqcoreStarting(t *testing.T) {
+	ctrl := &unreachableControl{}
+	w := NewTrackSyncWorker(fakeStore{[]string{"alice"}}, ctrl, 0)
+	w.retryEvery = 10 * time.Millisecond
+	w.retryFor = 200 * time.Millisecond
+	w.Start()
+	defer w.Stop()
+	w.NoteUptime(9)
+	w.NoteUptime(0)
+	time.Sleep(400 * time.Millisecond)
+	if n := ctrl.attempts.Load(); n < 3 {
+		t.Errorf("attempts = %d, want retries while vq-core is unreachable", n)
 	}
 }

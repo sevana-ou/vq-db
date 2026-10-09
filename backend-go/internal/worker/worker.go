@@ -6,6 +6,7 @@ package worker
 import (
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sevana-ou/vq-db/internal/bus"
@@ -15,6 +16,18 @@ import (
 type Control interface {
 	Send(op bus.TrackOp, patterns []string) bus.TrackAck
 }
+
+// reconnecter is implemented by controls that can redial (*bus.ControlClient).
+type reconnecter interface {
+	Reconnect() error
+}
+
+// Retry policy for a sync triggered by a vq-core restart: vq-core may still be
+// starting its control socket.
+const (
+	restartRetryEvery = 2 * time.Second
+	restartRetryFor   = 30 * time.Second
+)
 
 // TrackLoader loads persisted track patterns (satisfied by *db.TrackStore).
 type TrackLoader interface {
@@ -55,12 +68,19 @@ type TrackSyncWorker struct {
 
 	mu         sync.Mutex
 	lastUptime *uint64
+	// restarted is set by NoteUptime and consumed by the worker goroutine,
+	// which reconnects the control socket before syncing.
+	restarted atomic.Bool
+	// retryEvery / retryFor: retry policy after a restart (tests shorten it).
+	retryEvery time.Duration
+	retryFor   time.Duration
 }
 
 // NewTrackSyncWorker constructs a TrackSyncWorker.
 func NewTrackSyncWorker(store TrackLoader, control Control, interval time.Duration) *TrackSyncWorker {
 	return &TrackSyncWorker{store: store, control: control, interval: interval,
-		stop: make(chan struct{}), kick: make(chan struct{}, 1)}
+		stop: make(chan struct{}), kick: make(chan struct{}, 1),
+		retryEvery: restartRetryEvery, retryFor: restartRetryFor}
 }
 
 // Start runs the sync loop until Stop is called. A Kick before Start is kept
@@ -80,10 +100,39 @@ func (t *TrackSyncWorker) Start() {
 			case <-tick:
 				t.SyncOnce()
 			case <-t.kick:
-				t.SyncOnce()
+				t.syncAfterKick()
 			}
 		}
 	}()
+}
+
+// syncAfterKick runs a kicked sync. After a vq-core restart it first redials
+// the control socket, then retries while vq-core cannot be reached.
+func (t *TrackSyncWorker) syncAfterKick() {
+	if !t.restarted.Swap(false) {
+		t.SyncOnce()
+		return
+	}
+	deadline := time.Now().Add(t.retryFor)
+	for {
+		if r, ok := t.control.(reconnecter); ok {
+			if err := r.Reconnect(); err != nil {
+				slog.Warn("control socket reconnect failed", "err", err)
+			}
+		}
+		if t.SyncOnce() {
+			return
+		}
+		if time.Now().After(deadline) {
+			slog.Warn("could not re-apply track patterns after vq-core restart; periodic sync will retry")
+			return
+		}
+		select {
+		case <-t.stop:
+			return
+		case <-time.After(t.retryEvery):
+		}
+	}
 }
 
 // Kick requests a sync pass now (non-blocking; repeated kicks coalesce).
@@ -105,6 +154,7 @@ func (t *TrackSyncWorker) NoteUptime(uptimeSeconds uint64) {
 	t.mu.Unlock()
 	if restarted {
 		slog.Info("vq-core restart detected; re-applying track patterns", "uptime_s", uptimeSeconds)
+		t.restarted.Store(true)
 		t.Kick()
 	}
 }
@@ -112,21 +162,25 @@ func (t *TrackSyncWorker) NoteUptime(uptimeSeconds uint64) {
 // Stop halts the worker.
 func (t *TrackSyncWorker) Stop() { close(t.stop) }
 
-// SyncOnce runs a single reconcile pass.
-func (t *TrackSyncWorker) SyncOnce() {
+// SyncOnce runs a single reconcile pass. It returns false only when vq-core
+// could not be reached (worth retrying); nothing to do counts as done.
+func (t *TrackSyncWorker) SyncOnce() bool {
 	desired, err := t.store.Load()
 	if err != nil || len(desired) == 0 {
-		return // nothing to restore -> no control traffic
+		return true // nothing to restore -> no control traffic
 	}
 	query := t.control.Send(bus.TrackQuery, nil)
 	if !query.TransportOK {
-		return // vq-core down; retry next tick
+		return false // vq-core down; retry next tick
 	}
 	if setEqual(query.Current, desired) {
-		return // already in sync
+		return true // already in sync
 	}
 	rep := t.control.Send(bus.TrackReplace, desired)
-	if rep.TransportOK && rep.OK {
+	if !rep.TransportOK {
+		return false
+	}
+	if rep.OK {
 		slog.Info("re-synced track patterns to vq-core after drift", "count", len(desired))
 	} else {
 		detail := rep.Error
@@ -135,6 +189,7 @@ func (t *TrackSyncWorker) SyncOnce() {
 		}
 		slog.Warn("track re-sync REPLACE failed", "reason", detail)
 	}
+	return true
 }
 
 func setEqual(a, b []string) bool {
