@@ -121,3 +121,49 @@ func TestDecomposeEmptyIsZero(t *testing.T) {
 		t.Errorf("got %+v", d)
 	}
 }
+
+// PVQA 1.9 shape: no " !" marks, frame detectors report a fraction every
+// interval, and a silent stream's intervals are not rated Poor.
+const reportV2 = "Time; SilentCall; PacketLoss; Echo; Custom; Status\n" +
+	"0.00:0.68; 1.000; 0.857; 0.000; 0.20; Uncertain\n" +
+	"0.68:1.36; 0.971; 0.400; 0.120; 0.00; Poor\n" +
+	"1.36:2.04; 1.000; 0.900; 0.000; 0.00; Ok\n"
+
+var v2Thresholds = Thresholds{"SilentCall": 0.99, "PacketLoss": 0.5, "Echo": 0.0}
+
+func TestDecomposeWithThresholds(t *testing.T) {
+	d := DecomposeWith([]string{reportV2}, v2Thresholds)
+	// SilentCall: 1.000 twice (0.971 is below 0.99), whatever the status.
+	// PacketLoss: 0.857 and 0.900. Echo: IntThresh 0.0 means "above zero".
+	// Custom has no threshold: legacy rule, Poor rows only, so its 0.20 in an
+	// Uncertain row does not count.
+	want := map[string]int{"SilentCall": 2, "PacketLoss": 2, "Echo": 1, "Custom": 0}
+	if got := detectorMap(d); !reflect.DeepEqual(got, want) {
+		t.Errorf("counts = %v, want %v", got, want)
+	}
+	if d.Intervals != 3 || d.PoorIntervals != 1 || d.RfactorPercents() != 66 {
+		t.Errorf("intervals=%d poor=%d rfactor=%d", d.Intervals, d.PoorIntervals, d.RfactorPercents())
+	}
+}
+
+func TestDecomposeWithoutThresholdsKeepsLegacyRule(t *testing.T) {
+	want := map[string]int{"SilentCall": 1, "PacketLoss": 1, "Echo": 1, "Custom": 0}
+	if got := detectorMap(DecomposeWith([]string{reportV2}, nil)); !reflect.DeepEqual(got, want) {
+		t.Errorf("counts = %v, want %v", got, want)
+	}
+}
+
+func TestDecomposeMarkAlwaysTriggers(t *testing.T) {
+	text := "Time; SNR; Status\n0.00:0.68; 0.05 !; Normal\n"
+	if got := detectorMap(DecomposeWith([]string{text}, Thresholds{"SNR": 0.1})); got["SNR"] != 1 {
+		t.Errorf("marked cell below threshold: SNR = %d, want 1", got["SNR"])
+	}
+}
+
+func TestDecomposeUsesDefaultThresholds(t *testing.T) {
+	SetDefaultThresholds(v2Thresholds)
+	defer SetDefaultThresholds(nil)
+	if got := detectorMap(Decompose([]string{reportV2})); got["SilentCall"] != 2 {
+		t.Errorf("SilentCall = %d, want 2", got["SilentCall"])
+	}
+}

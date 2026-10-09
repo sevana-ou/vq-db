@@ -56,6 +56,8 @@ dashboard:
   max-streams: 40
   good-mos-threshold: 3.6
   sevana-mos: auto             # Sevana MOS (PVQA) figures in the UI: auto | on | off
+pvqa:
+  config: /opt/vq-monitor/pvqa.cfg   # detector IntThresh values for the detector counters
 database:
   engine: sqlite3
   connection: "db=/opt/vq-monitor-db-go/data/vq-monitor.sqlite"

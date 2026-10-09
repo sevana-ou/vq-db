@@ -47,6 +47,13 @@ dashboard:
     # JSON API always returns every field.
     sevana-mos:         auto
 
+# The pvqa.cfg vq-core analyses with (the same key vq-core reads). vq-db takes
+# each detector's IntThresh from it to decide when the detector counts as
+# triggered for an interval. Without it the counters use the legacy rule and
+# over-count PVQA 1.9 reports.
+pvqa:
+    config:             /opt/vq-monitor/pvqa.cfg
+
 database:
     engine:             sqlite3
     # OWN database file, separate from the other deployments'.

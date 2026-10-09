@@ -26,6 +26,7 @@ import (
 	"github.com/sevana-ou/vq-db/internal/db"
 	"github.com/sevana-ou/vq-db/internal/ingest"
 	"github.com/sevana-ou/vq-db/internal/model"
+	"github.com/sevana-ou/vq-db/internal/pvqa"
 	"github.com/sevana-ou/vq-db/internal/state"
 	"github.com/sevana-ou/vq-db/internal/web"
 	"github.com/sevana-ou/vq-db/internal/worker"
@@ -64,6 +65,7 @@ func run() int {
 	}
 	configureLogging(cfg)
 	writePidfile(cfg.Pidfile)
+	loadDetectorThresholds(cfg.PvqaConfig)
 
 	if !cfg.HasDatabase() {
 		slog.Error("config error: database engine/connection is required")
@@ -233,4 +235,21 @@ func writePidfile(path string) {
 	if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
 		slog.Warn("could not write pidfile", "path", path, "err", err)
 	}
+}
+
+// loadDetectorThresholds makes the detector counters use pvqa.cfg's IntThresh
+// values. Without them (no pvqa.config, or an unreadable file) the counters keep
+// the legacy rule, which over-counts PVQA 1.9 reports; that is logged, not fatal.
+func loadDetectorThresholds(path string) {
+	if path == "" {
+		slog.Warn("pvqa.config not set: detector counters use the legacy rule (any value in a Poor interval)")
+		return
+	}
+	thresholds, err := config.LoadDetectorThresholds(path)
+	if err != nil {
+		slog.Warn("detector thresholds not loaded: detector counters use the legacy rule", "pvqa_config", path, "err", err)
+		return
+	}
+	pvqa.SetDefaultThresholds(thresholds)
+	slog.Info("detector thresholds loaded", "pvqa_config", path, "detectors", len(thresholds))
 }

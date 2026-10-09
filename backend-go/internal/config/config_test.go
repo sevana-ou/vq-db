@@ -216,3 +216,70 @@ func TestSevanaMosMode(t *testing.T) {
 		}
 	}
 }
+
+// A pvqa.cfg excerpt: legacy and v2 detectors, one without IntThresh.
+const samplePvqaCfg = `
+Detector:
+  - Name:                 SNR
+    DetectorType:         SNR
+    IntThresh:            0.10
+    PVQA-Flag:            yes
+
+  - Name:                 Echo
+    DetectorType:         EchoMono
+    IntThresh:            0.0
+
+  - Name:                 SilentCall
+    DetectorType:         DeadAir
+    IntThresh:            0.99
+
+  - Name:                 NoThreshold
+    DetectorType:         Custom
+
+MOS Model:
+  Name:     test
+`
+
+func TestLoadDetectorThresholds(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "pvqa.cfg")
+	if err := os.WriteFile(p, []byte(samplePvqaCfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadDetectorThresholds(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]float64{"SNR": 0.10, "Echo": 0.0, "SilentCall": 0.99}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if g, ok := got[k]; !ok || g != v {
+			t.Errorf("%s = %v (present %v), want %v", k, g, ok, v)
+		}
+	}
+}
+
+func TestLoadDetectorThresholdsErrors(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := LoadDetectorThresholds(filepath.Join(dir, "missing.cfg")); err == nil {
+		t.Error("missing file: want error")
+	}
+	p := filepath.Join(dir, "empty.cfg")
+	if err := os.WriteFile(p, []byte("Detector: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadDetectorThresholds(p); err == nil {
+		t.Error("no thresholds: want error")
+	}
+}
+
+func TestPvqaConfigPath(t *testing.T) {
+	cfg := parse(map[string]any{"pvqa": map[string]any{"config": "/opt/vq-monitor/pvqa.cfg"}})
+	if cfg.PvqaConfig != "/opt/vq-monitor/pvqa.cfg" {
+		t.Errorf("PvqaConfig = %q", cfg.PvqaConfig)
+	}
+	if parse(map[string]any{}).PvqaConfig != "" {
+		t.Error("PvqaConfig should default to empty")
+	}
+}

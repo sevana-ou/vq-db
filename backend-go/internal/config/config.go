@@ -51,6 +51,10 @@ type Config struct {
 	// "auto" (default: hide them when vq-core reports a build without PVQA),
 	// "on" or "off".
 	SevanaMos string
+	// PvqaConfig is vq-core's pvqa.config: the pvqa.cfg whose detector
+	// IntThresh values decide when a detector counts as triggered for an
+	// interval (LoadDetectorThresholds). Empty keeps the legacy counting rule.
+	PvqaConfig string
 
 	// Database
 	DBEngine         string
@@ -257,6 +261,35 @@ func Load(path string) (*Config, error) {
 	return parse(doc), nil
 }
 
+// LoadDetectorThresholds reads the Detector list of a pvqa.cfg and returns each
+// detector's IntThresh by name. Detectors without IntThresh are left out, so
+// they keep the legacy counting rule.
+func LoadDetectorThresholds(path string) (map[string]float64, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		Detector []map[string]any `yaml:"Detector"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	out := map[string]float64{}
+	for _, d := range doc.Detector {
+		name := asString(d["Name"])
+		v, ok := d["IntThresh"]
+		if name == "" || !ok {
+			continue
+		}
+		out[name] = asFloat(v, 0)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%s: no detector IntThresh values found", path)
+	}
+	return out, nil
+}
+
 // parse builds a Config from a decoded YAML document (map[string]any tree).
 func parse(doc any) *Config {
 	cfg := defaults()
@@ -281,6 +314,7 @@ func parse(doc any) *Config {
 	cfg.GoodMosThreshold = asFloat(nestedGet(doc, "dashboard", "good-mos-threshold"), 3.6)
 	cfg.SilenceRatioThreshold = asFloat(nestedGet(doc, "dashboard", "silence-ratio-threshold"), 0.8)
 	cfg.SevanaMos = sevanaMosMode(nestedGet(doc, "dashboard", "sevana-mos"))
+	cfg.PvqaConfig = asString(nestedGet(doc, "pvqa", "config"))
 
 	cfg.DBEngine = asString(nestedGet(doc, "database", "engine"))
 	cfg.DBConnection = asString(nestedGet(doc, "database", "connection"))
