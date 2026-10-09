@@ -251,7 +251,9 @@ func writePidfile(path string) {
 // the legacy rule, which over-counts PVQA 1.9 reports; that is logged, not fatal.
 func loadDetectorThresholds(path string) {
 	if path == "" {
-		slog.Warn("pvqa.config not set: detector counters use the legacy rule (any value in a Poor interval)")
+		// Normal for a build without PVQA (the free edition): there are no
+		// detector reports to count.
+		slog.Info("pvqa.config not set: PVQA detector counters, if any arrive, use the legacy rule")
 		return
 	}
 	thresholds, err := config.LoadDetectorThresholds(path)
