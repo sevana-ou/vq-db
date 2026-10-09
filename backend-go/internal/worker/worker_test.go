@@ -171,3 +171,65 @@ func TestCleanupSweepLogsFailure(t *testing.T) {
 		t.Errorf("failure log:\n%s", out)
 	}
 }
+
+// notifyControl reports every Send on a channel, for tests that drive the
+// worker goroutine.
+type notifyControl struct {
+	acks map[bus.TrackOp]bus.TrackAck
+	sent chan bus.TrackOp
+}
+
+func (n *notifyControl) Send(op bus.TrackOp, patterns []string) bus.TrackAck {
+	n.sent <- op
+	return n.acks[op]
+}
+
+func TestSyncKickedWhenVqcoreRestarts(t *testing.T) {
+	ctrl := &notifyControl{sent: make(chan bus.TrackOp, 8), acks: map[bus.TrackOp]bus.TrackAck{
+		bus.TrackQuery:   {TransportOK: true, OK: true, Current: []string{}},
+		bus.TrackReplace: {TransportOK: true, OK: true, Current: []string{"alice"}},
+	}}
+	// Interval 0: no periodic pass, so any traffic comes from the restart kick.
+	w := NewTrackSyncWorker(fakeStore{[]string{"alice"}}, ctrl, 0)
+	w.Start()
+	defer w.Stop()
+
+	w.NoteUptime(100)
+	w.NoteUptime(101) // uptime growing: vq-core kept running
+	select {
+	case op := <-ctrl.sent:
+		t.Fatalf("unexpected %v without a restart", op)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	w.NoteUptime(2) // uptime went back: vq-core restarted
+	for _, want := range []bus.TrackOp{bus.TrackQuery, bus.TrackReplace} {
+		select {
+		case op := <-ctrl.sent:
+			if op != want {
+				t.Fatalf("op = %v, want %v", op, want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("no %v after the restart", want)
+		}
+	}
+}
+
+func TestKickBeforeStartIsKept(t *testing.T) {
+	ctrl := &notifyControl{sent: make(chan bus.TrackOp, 8), acks: map[bus.TrackOp]bus.TrackAck{
+		bus.TrackQuery: {TransportOK: true, OK: true, Current: []string{"alice"}},
+	}}
+	w := NewTrackSyncWorker(fakeStore{[]string{"alice"}}, ctrl, 0)
+	w.Kick()
+	w.Kick() // coalesces
+	w.Start()
+	defer w.Stop()
+	select {
+	case op := <-ctrl.sent:
+		if op != bus.TrackQuery {
+			t.Fatalf("op = %v", op)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("kick before Start was lost")
+	}
+}

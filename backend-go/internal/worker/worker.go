@@ -5,6 +5,7 @@ package worker
 
 import (
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/sevana-ou/vq-db/internal/bus"
@@ -39,35 +40,73 @@ func RestoreTrackPatterns(store TrackLoader, control Control) {
 	}
 }
 
-// TrackSyncWorker periodically reconciles vq-core's in-memory track list with
-// the persisted one, re-applying the persisted patterns if vq-core drifted
-// (e.g. restarted under a running vq-db).
+// TrackSyncWorker reconciles vq-core's in-memory track list with the persisted
+// one, re-applying the persisted patterns if vq-core drifted. vq-core starts
+// with an empty list, so a restart under a running vq-db is the usual drift:
+// NoteUptime spots it from the instance statistics (sent every second) and
+// syncs at once, instead of leaving calls unanalysed until the next periodic
+// pass (interval, track-resync-interval; <= 0 disables the periodic pass).
 type TrackSyncWorker struct {
 	store    TrackLoader
 	control  Control
 	interval time.Duration
 	stop     chan struct{}
+	kick     chan struct{}
+
+	mu         sync.Mutex
+	lastUptime *uint64
 }
 
 // NewTrackSyncWorker constructs a TrackSyncWorker.
 func NewTrackSyncWorker(store TrackLoader, control Control, interval time.Duration) *TrackSyncWorker {
-	return &TrackSyncWorker{store: store, control: control, interval: interval, stop: make(chan struct{})}
+	return &TrackSyncWorker{store: store, control: control, interval: interval,
+		stop: make(chan struct{}), kick: make(chan struct{}, 1)}
 }
 
-// Start runs the periodic sync until Stop is called.
+// Start runs the sync loop until Stop is called. A Kick before Start is kept
+// and handled once it runs.
 func (t *TrackSyncWorker) Start() {
 	go func() {
-		ticker := time.NewTicker(t.interval)
-		defer ticker.Stop()
+		var tick <-chan time.Time
+		if t.interval > 0 {
+			ticker := time.NewTicker(t.interval)
+			defer ticker.Stop()
+			tick = ticker.C
+		}
 		for {
 			select {
 			case <-t.stop:
 				return
-			case <-ticker.C:
+			case <-tick:
+				t.SyncOnce()
+			case <-t.kick:
 				t.SyncOnce()
 			}
 		}
 	}()
+}
+
+// Kick requests a sync pass now (non-blocking; repeated kicks coalesce).
+func (t *TrackSyncWorker) Kick() {
+	select {
+	case t.kick <- struct{}{}:
+	default:
+	}
+}
+
+// NoteUptime records vq-core's uptime from an instance-statistics event and
+// kicks a sync when it went backwards, i.e. vq-core restarted. Safe to call
+// from the bus goroutine.
+func (t *TrackSyncWorker) NoteUptime(uptimeSeconds uint64) {
+	t.mu.Lock()
+	restarted := t.lastUptime != nil && uptimeSeconds < *t.lastUptime
+	v := uptimeSeconds
+	t.lastUptime = &v
+	t.mu.Unlock()
+	if restarted {
+		slog.Info("vq-core restart detected; re-applying track patterns", "uptime_s", uptimeSeconds)
+		t.Kick()
+	}
 }
 
 // Stop halts the worker.

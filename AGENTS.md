@@ -154,7 +154,8 @@ construction (the writer lives on the bus goroutine).
   the call detail page, and returned as `health` by `/sip_calls` and `/sip_call`.
 - `internal/worker/` — background workers assembled in `main.go`: `CleanupWorker`
   (record/audio lifetime retention), `TrackSyncWorker` (re-applies persisted
-  track patterns if vq-core restarts), and `GhostSweeper` (finalizes ghosts on
+  track patterns if vq-core restarts: at once, when the uptime in vq-core's
+  instance statistics goes backwards, plus every `track-resync-interval`), and `GhostSweeper` (finalizes ghosts on
   the bus goroutine via the subscriber's on-idle tick). Workers must never
   panic out of their loop.
 

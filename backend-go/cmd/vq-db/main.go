@@ -101,9 +101,26 @@ func run() int {
 		slog.Info("bounded retention enabled", "records_limit", cfg.RecordsLimit, "store_sip_filter", cfg.StoreSipFilter)
 	}
 
+	control, err := bus.ControlClientForPort(cfg.ZeroMQControlPort, 5*time.Second)
+	if err != nil {
+		slog.Warn("could not open control socket, will retry", "err", err)
+	}
+	trackStore := db.NewTrackStore(writer)
+	// Built before the pipeline so the instance-statistics callback can report
+	// vq-core restarts to it; started with the other workers below.
+	var trackSync *worker.TrackSyncWorker
+	if control != nil {
+		trackSync = worker.NewTrackSyncWorker(trackStore, control, time.Duration(cfg.TrackResyncIntervalS)*time.Second)
+	}
+
 	registry := state.NewActiveStreamRegistry(cfg.AgentID, cfg.AgentName)
 	snapshot := state.NewInstanceSnapshot()
-	pipeline := ingest.NewPipeline(writer, registry, func(s model.InstanceStatistics) { snapshot.Set(s) })
+	pipeline := ingest.NewPipeline(writer, registry, func(s model.InstanceStatistics) {
+		snapshot.Set(s)
+		if trackSync != nil {
+			trackSync.NoteUptime(s.UptimeSeconds)
+		}
+	})
 
 	// Idle-timeout ghost sweep runs on the bus goroutine (via on_idle) so it can
 	// safely drive the single-owner writer.
@@ -113,12 +130,6 @@ func run() int {
 		onIdle = sweeper.Tick
 	}
 	subscriber := bus.SubscriberForPort(cfg.ZeroMQPort, pipeline.OnBytes, onIdle)
-
-	control, err := bus.ControlClientForPort(cfg.ZeroMQControlPort, 5*time.Second)
-	if err != nil {
-		slog.Warn("could not open control socket, will retry", "err", err)
-	}
-	trackStore := db.NewTrackStore(writer)
 
 	deps := api.Deps{
 		DB:                    conn,
@@ -157,9 +168,7 @@ func run() int {
 	if control != nil {
 		worker.RestoreTrackPatterns(trackStore, control)
 	}
-	var trackSync *worker.TrackSyncWorker
-	if control != nil && cfg.TrackResyncIntervalS > 0 {
-		trackSync = worker.NewTrackSyncWorker(trackStore, control, time.Duration(cfg.TrackResyncIntervalS)*time.Second)
+	if trackSync != nil {
 		trackSync.Start()
 	}
 
