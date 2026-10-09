@@ -57,7 +57,10 @@ type Deps struct {
 	Snapshot              Snapshot   // may be nil
 	Control               Control    // may be nil
 	TrackStore            TrackSaver // may be nil
-	StaticDir             string
+	// Alarms returns the alarm rules' state and the latest `events` state
+	// changes (internal/alarm, wired in main). May be nil.
+	Alarms    func(events int) AlarmView
+	StaticDir string
 	// UI is the embedded dashboard handler (internal/web). When set it owns
 	// /ui/... and the root redirect, and StaticDir is not served.
 	UI http.Handler
@@ -81,6 +84,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /summary", a.summary)
 	mux.HandleFunc("GET /sip_calls", a.sipCalls)
 	mux.HandleFunc("GET /sip_call", a.sipCall)
+	mux.HandleFunc("GET /alarms", a.alarms)
 	mux.HandleFunc("GET /sip_events", a.sipEvents)
 	mux.HandleFunc("GET /audio", a.audio)
 	mux.HandleFunc("GET /streamhistory", a.streamHistory)
@@ -625,4 +629,34 @@ func (a *App) serveIndex(w http.ResponseWriter, r *http.Request, index string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write(html)
+}
+
+// AlarmView is the alarms' state for /alarms and the dashboard page. Rules
+// never carry the command line or the webhook URL (they may hold tokens),
+// only whether each is configured.
+type AlarmView struct {
+	Configured bool             `json:"configured"`
+	Rules      []map[string]any `json:"rules"`
+	Events     []map[string]any `json:"events"`
+	Error      string           `json:"error,omitempty"`
+}
+
+// alarms serves the alarm rules' state and recent state changes.
+func (a *App) alarms(w http.ResponseWriter, r *http.Request) {
+	limit := int(a.optOr(queryIntOpt(r, "limit"), 50))
+	if limit <= 0 || limit > 1000 {
+		limit = 50
+	}
+	body := a.envelope()
+	view := AlarmView{Rules: []map[string]any{}, Events: []map[string]any{}}
+	if a.deps.Alarms != nil {
+		view = a.deps.Alarms(limit)
+	}
+	body["configured"] = view.Configured
+	body["rules"] = view.Rules
+	body["events"] = view.Events
+	if view.Error != "" {
+		body["error"] = view.Error
+	}
+	writeJSON(w, http.StatusOK, body)
 }

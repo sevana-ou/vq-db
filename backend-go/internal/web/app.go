@@ -38,6 +38,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /ui/sip-call/{id}", a.sipCallDetailPage)
 	mux.HandleFunc("GET /ui/chunk/{id}/{ts}", a.chunkDetailPage)
 	mux.HandleFunc("GET /ui/track", a.trackPage)
+	mux.HandleFunc("GET /ui/alarms", a.alarmsPage)
 	mux.HandleFunc("POST /ui/track/add", a.trackAdd)
 	mux.HandleFunc("POST /ui/track/remove", a.trackRemove)
 	mux.HandleFunc("POST /ui/track/clear", a.trackClear)

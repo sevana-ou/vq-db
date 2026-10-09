@@ -1,0 +1,63 @@
+{{define "content"}}
+<div class="page-head">
+  <h1>Alarms{{with .Data}}{{if .Active}} <span class="chip danger">{{.Active}} active</span>{{end}}{{end}}</h1>
+</div>
+<div id="alarms-body" hx-get="{{.SelfURL}}" hx-select="#alarms-body" hx-trigger="every 10s" hx-swap="outerHTML">
+{{with .Data}}
+{{if .Error}}<div class="error-banner">Error: {{.Error}}</div>{{end}}
+<div class="card">
+  <div class="card-head"><h2>Rules</h2></div>
+  {{if .Rules}}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Alarm</th><th>Condition</th><th>State</th><th>Value (samples)</th><th>Since</th><th>Notifies</th></tr></thead>
+    <tbody>
+    {{range .Rules}}
+    <tr>
+      <td><strong>{{.Name}}</strong></td>
+      <td>{{.Condition}}{{if .Filter}}<div class="muted small mono">{{.Filter}}</div>{{end}}</td>
+      <td>{{if eq .State "alarm"}}<span class="chip danger">Alarm</span>
+          {{- else if eq .State "ok"}}<span class="chip positive">OK</span>
+          {{- else if eq .State "no data"}}<span class="chip neutral" title="Fewer samples than required in the window; the state is kept">No data</span>
+          {{- else}}<span class="chip neutral">Pending</span>{{end}}
+          {{if .Error}}<div class="error-banner small">{{.Error}}</div>{{end}}</td>
+      <td class="num" title="Checked {{.Checked}}">{{.Value}}</td>
+      <td>{{.Since}}</td>
+      <td>{{.Notify}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else if .Configured}}
+  <p class="muted empty">No valid alarm rule; see the vq-db log.</p>
+  {{else}}
+  <p class="muted empty">No alarms configured. Add an <code>alarm:</code> list to the vq-db configuration:
+  each rule names a counter (network_mos, packet_loss, jitter, call_health, failed_calls, …), a limit and a window,
+  and a shell command and/or a webhook to notify.</p>
+  {{end}}
+</div>
+<div class="card">
+  <div class="card-head"><h2>Recent events</h2></div>
+  {{if .Events}}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Time</th><th>Alarm</th><th>Event</th><th>Value</th><th>Limit</th><th>Samples</th></tr></thead>
+    <tbody>
+    {{range .Events}}
+    <tr>
+      <td>{{.Time}}</td><td>{{.Name}}</td>
+      <td>{{if eq .Kind "cleared"}}<span class="chip positive">Cleared</span>{{else if eq .Kind "repeat"}}<span class="chip warning">Still in alarm</span>{{else}}<span class="chip danger">Raised</span>{{end}}</td>
+      <td class="num">{{.Value}}</td><td>{{.Limit}}</td><td class="num">{{.Samples}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}
+  <p class="muted empty">No alarm has fired yet.</p>
+  {{end}}
+</div>
+{{end}}
+</div>
+{{end}}

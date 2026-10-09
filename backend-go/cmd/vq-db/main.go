@@ -151,6 +151,7 @@ func run() int {
 		Registry:              registry,
 		Snapshot:              snapshot,
 		TrackStore:            trackStore,
+		Alarms:                func(n int) api.AlarmView { return alarmView(alarms, conn, n) },
 	}
 	if control != nil {
 		deps.Control = control
@@ -324,4 +325,51 @@ func buildAlarms(cfg *config.Config, conn *sql.DB) *alarmSet {
 		alarm.StoreNotifier{DB: conn}, set.commands, set.webhooks)
 	slog.Info("alarms configured", "rules", len(rules), "every", alarmCheckEvery)
 	return set
+}
+
+// alarmView renders the engine's state and the latest stored state changes
+// for /alarms and the dashboard. Events are shown even when no rule is
+// configured any more.
+func alarmView(set *alarmSet, conn *sql.DB, events int) api.AlarmView {
+	view := api.AlarmView{Rules: []map[string]any{}, Events: []map[string]any{}}
+	if set != nil {
+		view.Configured = true
+		for _, st := range set.engine.Statuses() {
+			r := st.Rule
+			state := "ok"
+			switch {
+			case st.Alarm:
+				state = "alarm"
+			case st.LastCheck.IsZero():
+				state = "pending"
+			case !st.Measured:
+				state = "no data"
+			}
+			view.Rules = append(view.Rules, map[string]any{
+				"name": r.Name, "counter": r.Counter, "op": r.Op.String(), "limit": r.Limit, "unit": r.Unit,
+				"window_s": int(r.Window.Seconds()), "min_samples": r.MinSamples, "filter": r.Filter, "code": r.Code,
+				"notify": map[string]any{"command": r.Command != "", "webhook": r.Webhook != "", "on_clear": r.OnClear},
+				"state":  state, "value": st.Value, "samples": st.Samples, "measured": st.Measured,
+				"last_check_ms": msOrZero(st.LastCheck), "last_change_ms": msOrZero(st.LastChange), "error": st.LastError,
+			})
+		}
+	}
+	evs, err := alarm.RecentEvents(conn, events)
+	if err != nil {
+		view.Error = err.Error()
+	}
+	for _, e := range evs {
+		view.Events = append(view.Events, map[string]any{
+			"name": e.Name, "kind": e.Kind, "counter": e.Counter, "op": e.Op, "value": e.Value,
+			"limit": e.Limit, "samples": e.Samples, "timestamp_ms": e.Timestamp,
+		})
+	}
+	return view
+}
+
+func msOrZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixMilli()
 }

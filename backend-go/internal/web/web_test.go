@@ -497,3 +497,38 @@ func TestStreamsFilterContains(t *testing.T) {
 		t.Error(`sip_dst ~ "nobody" still lists the stream`)
 	}
 }
+
+func TestAlarmsPage(t *testing.T) {
+	app := seededApp(t)
+	// Not wired: the page explains how to configure alarms.
+	if code, body := get(t, app, "/ui/alarms", nil); code != 200 || !strings.Contains(body, "No alarms configured") {
+		t.Fatalf("unwired page: %d", code)
+	}
+	app.deps.Alarms = func(n int) api.AlarmView {
+		return api.AlarmView{Configured: true,
+			Rules: []map[string]any{
+				{"name": "low-mos", "counter": "network_mos", "op": "below", "limit": 3.6, "unit": "MOS", "window_s": int64(900),
+					"min_samples": int64(5), "filter": `sip_dst ~ "carrier"`, "notify": map[string]any{"command": true, "webhook": true},
+					"state": "alarm", "value": 2.4567, "samples": int64(12), "last_change_ms": int64(1_700_000_000_000), "last_check_ms": int64(1_700_000_010_000)},
+				{"name": "loss", "counter": "packet_loss", "op": "above", "limit": 5.0, "unit": "%", "window_s": int64(3600),
+					"min_samples": int64(1), "notify": map[string]any{"webhook": true}, "state": "no data", "value": 0.0, "samples": int64(0)},
+			},
+			Events: []map[string]any{{"name": "low-mos", "kind": "alarm", "op": "below", "value": 2.4567, "limit": 3.6,
+				"samples": int64(12), "timestamp_ms": int64(1_700_000_000_000)}},
+		}
+	}
+	code, body := get(t, app, "/ui/alarms", nil)
+	if code != 200 {
+		t.Fatalf("code %d", code)
+	}
+	for _, want := range []string{">Alarms<", "1 active", "low-mos", "network_mos below 3.6 over 15 min, at least 5 samples",
+		"sip_dst ~ &#34;carrier&#34;", ">Alarm<", "2.457 (12)", "command, webhook", "packet_loss above 5% over 1 h",
+		">No data<", "Recent events", ">Raised<"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("alarms page missing %q", want)
+		}
+	}
+	if code, nav := get(t, app, "/ui/summary", nil); code != 200 || !strings.Contains(nav, "/ui/alarms") {
+		t.Error("navigation has no Alarms entry")
+	}
+}

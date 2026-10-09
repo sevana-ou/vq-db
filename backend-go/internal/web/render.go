@@ -40,6 +40,7 @@ var templates = func() map[string]*template.Template {
 		"summary.html", "core.html", "streams.html", "stream_detail.html",
 		"sip_calls.html", "sip_call_detail.html", "chunk_detail.html",
 		"track.html",
+		"alarms.html",
 	}
 	out := make(map[string]*template.Template, len(pages))
 	for _, p := range pages {

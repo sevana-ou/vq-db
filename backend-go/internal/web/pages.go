@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -596,4 +597,88 @@ func intParam(s string, def int) int {
 		return def
 	}
 	return n
+}
+
+// alarmsPage shows the alarm rules' state and the latest state changes.
+func (a *App) alarmsPage(w http.ResponseWriter, r *http.Request) {
+	data := map[string]any{}
+	view := api.AlarmView{}
+	if a.deps.Alarms != nil {
+		view = a.deps.Alarms(50)
+	}
+	data["Configured"] = view.Configured
+	data["Error"] = view.Error
+	var rules []map[string]any
+	active := 0
+	for _, rule := range view.Rules {
+		state := rawString(rule["state"])
+		if state == "alarm" {
+			active++
+		}
+		unit := rawString(rule["unit"])
+		cond := fmt.Sprintf("%s %s %s%s over %s", rawString(rule["counter"]), rawString(rule["op"]),
+			alarmNum(rule["limit"]), unitSuffix(unit), windowText(toI64(rule["window_s"])))
+		if c := rawString(rule["code"]); c != "" {
+			cond = strings.Replace(cond, "call_health", "call_health["+c+"]", 1)
+		}
+		if n := toI64(rule["min_samples"]); n > 1 {
+			cond += fmt.Sprintf(", at least %d samples", n)
+		}
+		var notify []string
+		if nm, ok := rule["notify"].(map[string]any); ok {
+			if nm["command"] == true {
+				notify = append(notify, "command")
+			}
+			if nm["webhook"] == true {
+				notify = append(notify, "webhook")
+			}
+		}
+		value := "—"
+		if state != "pending" {
+			value = alarmNum(rule["value"]) + unitSuffix(unit) + fmt.Sprintf(" (%d)", toI64(rule["samples"]))
+		}
+		rules = append(rules, map[string]any{
+			"Name": rawString(rule["name"]), "Condition": cond, "Filter": rawString(rule["filter"]),
+			"State": state, "Value": value, "Since": sipTime(rule["last_change_ms"]),
+			"Checked": sipTime(rule["last_check_ms"]), "Notify": strings.Join(notify, ", "), "Error": rawString(rule["error"]),
+		})
+	}
+	data["Rules"], data["Active"] = rules, active
+	var events []map[string]any
+	for _, e := range view.Events {
+		events = append(events, map[string]any{
+			"Time": sipTime(e["timestamp_ms"]), "Name": rawString(e["name"]), "Kind": rawString(e["kind"]),
+			"Value": alarmNum(e["value"]), "Limit": rawString(e["op"]) + " " + alarmNum(e["limit"]), "Samples": toI64(e["samples"]),
+		})
+	}
+	data["Events"] = events
+	a.render(w, r, "alarms.html", pageData{Nav: "alarms", Title: "Alarms", Data: data})
+}
+
+// alarmNum prints a counter value without noise: 3 significant decimals at most.
+func alarmNum(v any) string {
+	return strconv.FormatFloat(math.Round(toF64(v)*1000)/1000, 'f', -1, 64)
+}
+
+func unitSuffix(unit string) string {
+	switch unit {
+	case "%":
+		return "%"
+	case "ms", "s", "packets":
+		return " " + unit
+	}
+	return "" // MOS, R and shares of 1 need no unit
+}
+
+// windowText renders a window in seconds as "15 min", "1 h", "7 d".
+func windowText(s int64) string {
+	switch {
+	case s%86400 == 0:
+		return fmt.Sprintf("%d d", s/86400)
+	case s%3600 == 0:
+		return fmt.Sprintf("%d h", s/3600)
+	case s%60 == 0:
+		return fmt.Sprintf("%d min", s/60)
+	}
+	return fmt.Sprintf("%d s", s)
 }

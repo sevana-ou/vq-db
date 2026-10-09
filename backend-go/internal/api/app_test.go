@@ -241,3 +241,23 @@ func TestSipCallsCarryHealth(t *testing.T) {
 		t.Errorf("unjudged call health = %v, want null", none["health"])
 	}
 }
+
+func TestAlarmsEndpoint(t *testing.T) {
+	app := seededApp(t)
+	_, body := getJSON(t, app, "/alarms")
+	if body["configured"] != false || len(body["rules"].([]any)) != 0 {
+		t.Errorf("unwired /alarms = %v", body)
+	}
+	seen := 0
+	app.deps.Alarms = func(n int) AlarmView {
+		seen = n
+		return AlarmView{Configured: true, Rules: []map[string]any{{"name": "x", "state": "ok"}}, Events: []map[string]any{}}
+	}
+	_, body = getJSON(t, app, "/alarms?limit=7")
+	if seen != 7 || body["configured"] != true || body["rules"].([]any)[0].(map[string]any)["state"] != "ok" {
+		t.Errorf("/alarms = %v (limit %d)", body, seen)
+	}
+	if _, has := body["instance"]; !has {
+		t.Error("/alarms has no instance envelope")
+	}
+}
