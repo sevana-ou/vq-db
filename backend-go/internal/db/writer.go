@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -261,6 +262,21 @@ func (w *Writer) AddSipCallFailed(e model.SipCallFailed) error {
 		"caller_codecs":    e.Caller.Codecs,
 		"callee_codecs":    e.Callee.Codecs,
 	})
+}
+
+// AddCallHealth stores one call-level verdict from vq-core.
+func (w *Writer) AddCallHealth(e model.CallHealth) error {
+	warnings := e.Warnings
+	if warnings == nil {
+		warnings = []model.CallHealthWarning{}
+	}
+	js, err := json.Marshal(warnings)
+	if err != nil {
+		return err
+	}
+	_, err = w.exec("INSERT INTO rtpmon_call_health (call_id, event_timestamp, stream_count, warnings) VALUES (?, ?, ?, ?)",
+		e.CallID, e.Timestamp, e.StreamCount, string(js))
+	return err
 }
 
 // ----- maintenance ----- //

@@ -170,3 +170,29 @@ func TestDecodeBytesRoundtrip(t *testing.T) {
 		t.Errorf("got %+v %v", out, ok)
 	}
 }
+
+func TestCallHealth(t *testing.T) {
+	e := &pb.Event{CallHealth: &pb.CallHealth{
+		CallId: "c1", Timestamp: 5000, StreamCount: 2,
+		Warnings: []*pb.CallHealth_Warning{{
+			Code: pb.CallHealth_CODE_PTIME_ASYM, Tag: "Ptime asym",
+			Explanation: "Packetization time differs between legs: 40 ms vs 20 ms.", StreamIds: []string{"a", "b"},
+		}},
+	}}
+	out, ok := DecodeEvent(e).(model.CallHealth)
+	if !ok {
+		t.Fatalf("got %T", DecodeEvent(e))
+	}
+	if out.CallID != "c1" || out.Timestamp != 5000 || out.StreamCount != 2 || len(out.Warnings) != 1 {
+		t.Fatalf("got %+v", out)
+	}
+	w := out.Warnings[0]
+	if w.Code != "ptime_asym" || w.Tag != "Ptime asym" || len(w.StreamIDs) != 2 {
+		t.Errorf("warning = %+v", w)
+	}
+	// A healthy call decodes to an empty, non-nil list.
+	ok2, _ := DecodeEvent(&pb.Event{CallHealth: &pb.CallHealth{CallId: "c2"}}).(model.CallHealth)
+	if ok2.Warnings == nil || len(ok2.Warnings) != 0 {
+		t.Errorf("healthy call warnings = %#v", ok2.Warnings)
+	}
+}

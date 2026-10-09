@@ -151,6 +151,9 @@ func (w *Writer) RemoveOldRecords(cutoffMs int64) (st CleanupStats, err error) {
 		return st, err
 	}
 	st.SipEvents, _ = res.RowsAffected()
+	if _, err := w.exec("DELETE FROM rtpmon_call_health WHERE event_timestamp < ?", cutoffMs); err != nil {
+		return st, err
+	}
 	return st, nil
 }
 

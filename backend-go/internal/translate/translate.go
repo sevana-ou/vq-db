@@ -6,6 +6,7 @@ package translate
 
 import (
 	"net"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 
@@ -122,6 +123,24 @@ func DecodeEvent(event *pb.Event) any {
 			Caller:          peer(s.GetCaller()),
 			Callee:          peer(s.GetCallee()),
 		}
+	}
+	if event.GetCallHealth() != nil {
+		h := event.GetCallHealth()
+		out := model.CallHealth{
+			CallID:      h.GetCallId(),
+			Timestamp:   int64(h.GetTimestamp()),
+			StreamCount: int(h.GetStreamCount()),
+			Warnings:    []model.CallHealthWarning{},
+		}
+		for _, w := range h.GetWarnings() {
+			out.Warnings = append(out.Warnings, model.CallHealthWarning{
+				Code:        strings.ToLower(strings.TrimPrefix(w.GetCode().String(), "CODE_")),
+				Tag:         w.GetTag(),
+				Explanation: w.GetExplanation(),
+				StreamIDs:   append([]string{}, w.GetStreamIds()...),
+			})
+		}
+		return out
 	}
 	if event.GetEspSaEvent() != nil {
 		e := event.GetEspSaEvent()

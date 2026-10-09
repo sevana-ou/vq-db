@@ -30,6 +30,8 @@ func seededApp(t *testing.T) *App {
 	w.AddFinal(model.StreamReport{StreamID: sid, StartMs: 1000, EndMs: 21000, SevanaMOS: fptr(3.7), NetworkMOS: fptr(4.0), Jitter: 10.0, Codec: "opus", FullReport: true, SipCallID: "c1", SipPeerA: "sip:a@h", SipPeerB: "sip:b@h", RTPPacketCounter: 1000, LostPacketCounter: 5})
 	w.AddSipCallStart(model.SipCallStart{CallID: "c1", Timestamp: 1000, SetupCode: 200, Caller: model.SipPeer{Aor: "sip:a@h"}, Callee: model.SipPeer{Aor: "sip:b@h"}})
 	w.AddSipCallEnd(model.SipCallEnd{CallID: "c1", Timestamp: 21000, Duration: 20000, ResponseCodes: []uint32{200}})
+	w.AddCallHealth(model.CallHealth{CallID: "c1", Timestamp: 45000, StreamCount: 1, Warnings: []model.CallHealthWarning{
+		{Code: "one_way_audio", Tag: "One-way audio", Explanation: "Only one RTP stream detected; no return-path media.", StreamIDs: []string{"lnk-1"}}}})
 
 	return NewApp(Deps{
 		DB: conn, AgentID: "agent_1", AgentName: "First",
@@ -218,5 +220,24 @@ func TestTrackWithoutControlReturns503(t *testing.T) {
 	code, _ := getJSON(t, app, "/track")
 	if code != 503 {
 		t.Errorf("code = %d", code)
+	}
+}
+
+func TestSipCallsCarryHealth(t *testing.T) {
+	app := seededApp(t)
+	_, body := getJSON(t, app, "/sip_calls")
+	calls := body["calls"].([]any)
+	h := calls[0].(map[string]any)["health"].(map[string]any)
+	ws := h["warnings"].([]any)
+	if len(ws) != 1 || ws[0].(map[string]any)["code"] != "one_way_audio" || h["stream_count"] != 1.0 {
+		t.Errorf("health = %v", h)
+	}
+	_, one := getJSON(t, app, "/sip_call?call_id=c1")
+	if one["health"] == nil {
+		t.Error("/sip_call missing health")
+	}
+	_, none := getJSON(t, app, "/sip_call?call_id=unknown")
+	if none["health"] != nil {
+		t.Errorf("unjudged call health = %v, want null", none["health"])
 	}
 }

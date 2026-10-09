@@ -273,8 +273,20 @@ func (a *App) sipCalls(w http.ResponseWriter, r *http.Request) {
 	body := a.envelope()
 	body["total_calls_count"] = count
 	calls := make([]map[string]any, 0, len(list))
+	ids := make([]string, 0, len(list))
 	for _, s := range list {
-		calls = append(calls, SipCallSummaryToJSON(s))
+		c := SipCallSummaryToJSON(s)
+		calls = append(calls, c)
+		ids = append(ids, getStr(c, "call_id"))
+	}
+	health, err := GetCallHealth(a.deps.DB, ids)
+	if err != nil {
+		httpError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	for i, c := range calls {
+		h, ok := health[ids[i]]
+		c["health"] = CallHealthToJSON(h, ok)
 	}
 	body["calls"] = calls
 	writeJSON(w, http.StatusOK, body)
@@ -299,6 +311,13 @@ func (a *App) sipCall(w http.ResponseWriter, r *http.Request) {
 	}
 	body["events"] = evs
 	body["event_count"] = len(events)
+	health, err := GetCallHealth(a.deps.DB, []string{callID})
+	if err != nil {
+		httpError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	h, ok := health[callID]
+	body["health"] = CallHealthToJSON(h, ok)
 	writeJSON(w, http.StatusOK, body)
 }
 

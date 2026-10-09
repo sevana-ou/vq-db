@@ -17,6 +17,11 @@
       {{- else if eq .Outcome "failed"}}<span class="chip danger">Failed</span>
       {{- else}}<span class="chip neutral">Unknown</span>{{end}}</dd>
     <dt>Events</dt><dd>{{.EventCount}}</dd>
+    {{with .Health}}
+    <dt title="vq-core's call-level check of the call's RTP streams">Call health</dt><dd>
+      {{- if .Warnings}}{{range .Warnings}}<div><span class="chip warning">⚠ {{.Tag}}</span> {{.Explanation}}</div>{{end}}
+      {{- else}}<span class="chip positive">No problems found</span> <span class="muted">{{.StreamCount}} stream(s) checked</span>{{end}}</dd>
+    {{end}}
   </dl>
 </div>
 

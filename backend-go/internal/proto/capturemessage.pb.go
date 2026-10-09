@@ -169,6 +169,73 @@ func (SipCallFailed_Reason) EnumDescriptor() ([]byte, []int) {
 	return file_capturemessage_proto_rawDescGZIP(), []int{15, 0}
 }
 
+type CallHealth_Code int32
+
+const (
+	CallHealth_CODE_UNSPECIFIED       CallHealth_Code = 0
+	CallHealth_CODE_NO_RTP            CallHealth_Code = 1 // SIP call without RTP media
+	CallHealth_CODE_ONE_WAY_AUDIO     CallHealth_Code = 2 // single stream, or no return-direction stream
+	CallHealth_CODE_CODEC_ASYM        CallHealth_Code = 3 // directions use different codecs
+	CallHealth_CODE_PTIME_ASYM        CallHealth_Code = 4 // directions use different packetization times
+	CallHealth_CODE_PAYLOAD_ASYM      CallHealth_Code = 5 // same codec, different RTP payload types
+	CallHealth_CODE_DURATION_ASYM     CallHealth_Code = 6 // one leg much shorter than the other
+	CallHealth_CODE_LATE_MEDIA        CallHealth_Code = 7 // one leg started long after the other
+	CallHealth_CODE_ONE_SIDED_SILENCE CallHealth_Code = 8 // one direction carries only silence
+)
+
+// Enum value maps for CallHealth_Code.
+var (
+	CallHealth_Code_name = map[int32]string{
+		0: "CODE_UNSPECIFIED",
+		1: "CODE_NO_RTP",
+		2: "CODE_ONE_WAY_AUDIO",
+		3: "CODE_CODEC_ASYM",
+		4: "CODE_PTIME_ASYM",
+		5: "CODE_PAYLOAD_ASYM",
+		6: "CODE_DURATION_ASYM",
+		7: "CODE_LATE_MEDIA",
+		8: "CODE_ONE_SIDED_SILENCE",
+	}
+	CallHealth_Code_value = map[string]int32{
+		"CODE_UNSPECIFIED":       0,
+		"CODE_NO_RTP":            1,
+		"CODE_ONE_WAY_AUDIO":     2,
+		"CODE_CODEC_ASYM":        3,
+		"CODE_PTIME_ASYM":        4,
+		"CODE_PAYLOAD_ASYM":      5,
+		"CODE_DURATION_ASYM":     6,
+		"CODE_LATE_MEDIA":        7,
+		"CODE_ONE_SIDED_SILENCE": 8,
+	}
+)
+
+func (x CallHealth_Code) Enum() *CallHealth_Code {
+	p := new(CallHealth_Code)
+	*p = x
+	return p
+}
+
+func (x CallHealth_Code) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (CallHealth_Code) Descriptor() protoreflect.EnumDescriptor {
+	return file_capturemessage_proto_enumTypes[3].Descriptor()
+}
+
+func (CallHealth_Code) Type() protoreflect.EnumType {
+	return &file_capturemessage_proto_enumTypes[3]
+}
+
+func (x CallHealth_Code) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use CallHealth_Code.Descriptor instead.
+func (CallHealth_Code) EnumDescriptor() ([]byte, []int) {
+	return file_capturemessage_proto_rawDescGZIP(), []int{16, 0}
+}
+
 type Command_Op int32
 
 const (
@@ -205,11 +272,11 @@ func (x Command_Op) String() string {
 }
 
 func (Command_Op) Descriptor() protoreflect.EnumDescriptor {
-	return file_capturemessage_proto_enumTypes[3].Descriptor()
+	return file_capturemessage_proto_enumTypes[4].Descriptor()
 }
 
 func (Command_Op) Type() protoreflect.EnumType {
-	return &file_capturemessage_proto_enumTypes[3]
+	return &file_capturemessage_proto_enumTypes[4]
 }
 
 func (x Command_Op) Number() protoreflect.EnumNumber {
@@ -218,7 +285,7 @@ func (x Command_Op) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Command_Op.Descriptor instead.
 func (Command_Op) EnumDescriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{18, 0}
+	return file_capturemessage_proto_rawDescGZIP(), []int{19, 0}
 }
 
 type IpAddress struct {
@@ -289,16 +356,17 @@ func (x *IpAddress) GetPort() uint32 {
 	return 0
 }
 
-// An IPsec ESP security association was bound in vq-core's key store. Published
-// only when server.esp.publish-sa-events is on; key bytes present only under
-// publish-keys. For coverage monitoring.
+// An IPsec ESP security association (or a registration's worth of them) was
+// bound in the key store. Published only when server.esp.publish-sa-events is on;
+// key bytes are present only when server.esp.publish-keys is also on. Emitted for
+// coverage monitoring - proving the tap is harvesting keys in production.
 type EspSaEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Spis          []uint32               `protobuf:"varint,1,rep,packed,name=spis,proto3" json:"spis,omitempty"` // SPIs bound (one per SA)
-	Dst           *IpAddress             `protobuf:"bytes,2,opt,name=dst,proto3" json:"dst,omitempty"`           // SA destination (owner of the SPI)
-	EncAlg        string                 `protobuf:"bytes,3,opt,name=enc_alg,json=encAlg,proto3" json:"enc_alg,omitempty"`
-	AuthAlg       string                 `protobuf:"bytes,4,opt,name=auth_alg,json=authAlg,proto3" json:"auth_alg,omitempty"`
-	Source        uint32                 `protobuf:"varint,5,opt,name=source,proto3" json:"source,omitempty"`                 // 0 = harvested, 1 = static file
+	Spis          []uint32               `protobuf:"varint,1,rep,packed,name=spis,proto3" json:"spis,omitempty"`              // SPIs bound (one per SA)
+	Dst           *IpAddress             `protobuf:"bytes,2,opt,name=dst,proto3" json:"dst,omitempty"`                        // SA destination (owner of the SPI)
+	EncAlg        string                 `protobuf:"bytes,3,opt,name=enc_alg,json=encAlg,proto3" json:"enc_alg,omitempty"`    // "null" | "aes-cbc" | "des-ede3-cbc"
+	AuthAlg       string                 `protobuf:"bytes,4,opt,name=auth_alg,json=authAlg,proto3" json:"auth_alg,omitempty"` // "null" | "hmac-md5-96" | "hmac-sha-1-96"
+	Source        uint32                 `protobuf:"varint,5,opt,name=source,proto3" json:"source,omitempty"`                 // 0 = harvested from signalling, 1 = static file
 	EncKey        []byte                 `protobuf:"bytes,6,opt,name=enc_key,json=encKey,proto3" json:"enc_key,omitempty"`    // present only under publish-keys
 	AuthKey       []byte                 `protobuf:"bytes,7,opt,name=auth_key,json=authKey,proto3" json:"auth_key,omitempty"` // present only under publish-keys
 	unknownFields protoimpl.UnknownFields
@@ -1772,6 +1840,81 @@ func (x *SipCallFailed) GetReasonPhrase() string {
 	return ""
 }
 
+// Call-level health of a SIP call: problems visible only when the call's RTP
+// streams are compared with each other (one-way audio, codec / ptime / payload
+// type asymmetry, late media, one-sided silence). Rules live in vq-net
+// vq_rtp_library/vq_rtp_call_health.* (shared with vq_pcap / pcaptix).
+// Published once per call that ended with a BYE, after its streams finished
+// (a grace period of ~2.5 report intervals after the BYE), and for calls still
+// pending when vq-core shuts down. An empty warnings list means a healthy call.
+type CallHealth struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallId        string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`                 // SIP Call-ID
+	Timestamp     uint64                 `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                        // evaluation time, UNIX ms
+	StreamCount   uint32                 `protobuf:"varint,3,opt,name=stream_count,json=streamCount,proto3" json:"stream_count,omitempty"` // RTP streams of the call that were judged
+	Warnings      []*CallHealth_Warning  `protobuf:"bytes,4,rep,name=warnings,proto3" json:"warnings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CallHealth) Reset() {
+	*x = CallHealth{}
+	mi := &file_capturemessage_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CallHealth) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CallHealth) ProtoMessage() {}
+
+func (x *CallHealth) ProtoReflect() protoreflect.Message {
+	mi := &file_capturemessage_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CallHealth.ProtoReflect.Descriptor instead.
+func (*CallHealth) Descriptor() ([]byte, []int) {
+	return file_capturemessage_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CallHealth) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *CallHealth) GetTimestamp() uint64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *CallHealth) GetStreamCount() uint32 {
+	if x != nil {
+		return x.StreamCount
+	}
+	return 0
+}
+
+func (x *CallHealth) GetWarnings() []*CallHealth_Warning {
+	if x != nil {
+		return x.Warnings
+	}
+	return nil
+}
+
 type Event struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	StreamReport  *Stream                `protobuf:"bytes,1,opt,name=stream_report,json=streamReport,proto3" json:"stream_report,omitempty"`
@@ -1786,13 +1929,14 @@ type Event struct {
 	SipCallFailed *SipCallFailed         `protobuf:"bytes,10,opt,name=sip_call_failed,json=sipCallFailed,proto3" json:"sip_call_failed,omitempty"`
 	StreamAudio   *StreamAudio           `protobuf:"bytes,11,opt,name=stream_audio,json=streamAudio,proto3" json:"stream_audio,omitempty"`
 	EspSaEvent    *EspSaEvent            `protobuf:"bytes,12,opt,name=esp_sa_event,json=espSaEvent,proto3" json:"esp_sa_event,omitempty"`
+	CallHealth    *CallHealth            `protobuf:"bytes,13,opt,name=call_health,json=callHealth,proto3" json:"call_health,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_capturemessage_proto_msgTypes[16]
+	mi := &file_capturemessage_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1804,7 +1948,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[16]
+	mi := &file_capturemessage_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1817,7 +1961,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{16}
+	return file_capturemessage_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Event) GetStreamReport() *Stream {
@@ -1904,6 +2048,13 @@ func (x *Event) GetEspSaEvent() *EspSaEvent {
 	return nil
 }
 
+func (x *Event) GetCallHealth() *CallHealth {
+	if x != nil {
+		return x.CallHealth
+	}
+	return nil
+}
+
 // One entry of the track list. The pattern is matched case-insensitively as a
 // substring against both peers' SIP AOR (e.g. "alice", "sip:alice@host").
 type TrackEntry struct {
@@ -1915,7 +2066,7 @@ type TrackEntry struct {
 
 func (x *TrackEntry) Reset() {
 	*x = TrackEntry{}
-	mi := &file_capturemessage_proto_msgTypes[17]
+	mi := &file_capturemessage_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1927,7 +2078,7 @@ func (x *TrackEntry) String() string {
 func (*TrackEntry) ProtoMessage() {}
 
 func (x *TrackEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[17]
+	mi := &file_capturemessage_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1940,7 +2091,7 @@ func (x *TrackEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrackEntry.ProtoReflect.Descriptor instead.
 func (*TrackEntry) Descriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{17}
+	return file_capturemessage_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TrackEntry) GetSipPattern() string {
@@ -1961,7 +2112,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_capturemessage_proto_msgTypes[18]
+	mi := &file_capturemessage_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1973,7 +2124,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[18]
+	mi := &file_capturemessage_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1986,7 +2137,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{18}
+	return file_capturemessage_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Command) GetOp() Command_Op {
@@ -2016,7 +2167,7 @@ type CommandAck struct {
 
 func (x *CommandAck) Reset() {
 	*x = CommandAck{}
-	mi := &file_capturemessage_proto_msgTypes[19]
+	mi := &file_capturemessage_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2028,7 +2179,7 @@ func (x *CommandAck) String() string {
 func (*CommandAck) ProtoMessage() {}
 
 func (x *CommandAck) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[19]
+	mi := &file_capturemessage_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2041,7 +2192,7 @@ func (x *CommandAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandAck.ProtoReflect.Descriptor instead.
 func (*CommandAck) Descriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{19}
+	return file_capturemessage_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CommandAck) GetOk() bool {
@@ -2084,7 +2235,7 @@ type Stream_SipInfo struct {
 
 func (x *Stream_SipInfo) Reset() {
 	*x = Stream_SipInfo{}
-	mi := &file_capturemessage_proto_msgTypes[20]
+	mi := &file_capturemessage_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2096,7 +2247,7 @@ func (x *Stream_SipInfo) String() string {
 func (*Stream_SipInfo) ProtoMessage() {}
 
 func (x *Stream_SipInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[20]
+	mi := &file_capturemessage_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2144,7 +2295,7 @@ type Stream_EchoPeak struct {
 
 func (x *Stream_EchoPeak) Reset() {
 	*x = Stream_EchoPeak{}
-	mi := &file_capturemessage_proto_msgTypes[21]
+	mi := &file_capturemessage_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2156,7 +2307,7 @@ func (x *Stream_EchoPeak) String() string {
 func (*Stream_EchoPeak) ProtoMessage() {}
 
 func (x *Stream_EchoPeak) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[21]
+	mi := &file_capturemessage_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2207,7 +2358,7 @@ type Stream_DtxInfo struct {
 
 func (x *Stream_DtxInfo) Reset() {
 	*x = Stream_DtxInfo{}
-	mi := &file_capturemessage_proto_msgTypes[22]
+	mi := &file_capturemessage_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2219,7 +2370,7 @@ func (x *Stream_DtxInfo) String() string {
 func (*Stream_DtxInfo) ProtoMessage() {}
 
 func (x *Stream_DtxInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[22]
+	mi := &file_capturemessage_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2254,6 +2405,74 @@ func (x *Stream_DtxInfo) GetCountTotal() uint64 {
 		return x.CountTotal
 	}
 	return 0
+}
+
+type CallHealth_Warning struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          CallHealth_Code        `protobuf:"varint,1,opt,name=code,proto3,enum=messages.CallHealth_Code" json:"code,omitempty"`
+	Tag           string                 `protobuf:"bytes,2,opt,name=tag,proto3" json:"tag,omitempty"`                              // short label, e.g. "Codec asym"
+	Explanation   string                 `protobuf:"bytes,3,opt,name=explanation,proto3" json:"explanation,omitempty"`              // one sentence for a tooltip
+	StreamIds     []string               `protobuf:"bytes,4,rep,name=stream_ids,json=streamIds,proto3" json:"stream_ids,omitempty"` // StreamId.uuid of the streams concerned
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CallHealth_Warning) Reset() {
+	*x = CallHealth_Warning{}
+	mi := &file_capturemessage_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CallHealth_Warning) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CallHealth_Warning) ProtoMessage() {}
+
+func (x *CallHealth_Warning) ProtoReflect() protoreflect.Message {
+	mi := &file_capturemessage_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CallHealth_Warning.ProtoReflect.Descriptor instead.
+func (*CallHealth_Warning) Descriptor() ([]byte, []int) {
+	return file_capturemessage_proto_rawDescGZIP(), []int{16, 0}
+}
+
+func (x *CallHealth_Warning) GetCode() CallHealth_Code {
+	if x != nil {
+		return x.Code
+	}
+	return CallHealth_CODE_UNSPECIFIED
+}
+
+func (x *CallHealth_Warning) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *CallHealth_Warning) GetExplanation() string {
+	if x != nil {
+		return x.Explanation
+	}
+	return ""
+}
+
+func (x *CallHealth_Warning) GetStreamIds() []string {
+	if x != nil {
+		return x.StreamIds
+	}
+	return nil
 }
 
 var File_capturemessage_proto protoreflect.FileDescriptor
@@ -2422,7 +2641,29 @@ const file_capturemessage_proto_rawDesc = "" +
 	"\x0eREASON_UNKNOWN\x10\x00\x12\x13\n" +
 	"\x0fREASON_REJECTED\x10\x01\x12\x13\n" +
 	"\x0fREASON_CANCELED\x10\x02\x12\x12\n" +
-	"\x0eREASON_TIMEOUT\x10\x03\"\xd4\x05\n" +
+	"\x0eREASON_TIMEOUT\x10\x03\"\x80\x04\n" +
+	"\n" +
+	"CallHealth\x12\x17\n" +
+	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\x12!\n" +
+	"\fstream_count\x18\x03 \x01(\rR\vstreamCount\x128\n" +
+	"\bwarnings\x18\x04 \x03(\v2\x1c.messages.CallHealth.WarningR\bwarnings\x1a\x8b\x01\n" +
+	"\aWarning\x12-\n" +
+	"\x04code\x18\x01 \x01(\x0e2\x19.messages.CallHealth.CodeR\x04code\x12\x10\n" +
+	"\x03tag\x18\x02 \x01(\tR\x03tag\x12 \n" +
+	"\vexplanation\x18\x03 \x01(\tR\vexplanation\x12\x1d\n" +
+	"\n" +
+	"stream_ids\x18\x04 \x03(\tR\tstreamIds\"\xcf\x01\n" +
+	"\x04Code\x12\x14\n" +
+	"\x10CODE_UNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vCODE_NO_RTP\x10\x01\x12\x16\n" +
+	"\x12CODE_ONE_WAY_AUDIO\x10\x02\x12\x13\n" +
+	"\x0fCODE_CODEC_ASYM\x10\x03\x12\x13\n" +
+	"\x0fCODE_PTIME_ASYM\x10\x04\x12\x15\n" +
+	"\x11CODE_PAYLOAD_ASYM\x10\x05\x12\x16\n" +
+	"\x12CODE_DURATION_ASYM\x10\x06\x12\x13\n" +
+	"\x0fCODE_LATE_MEDIA\x10\a\x12\x1a\n" +
+	"\x16CODE_ONE_SIDED_SILENCE\x10\b\"\x8b\x06\n" +
 	"\x05Event\x125\n" +
 	"\rstream_report\x18\x01 \x01(\v2\x10.messages.StreamR\fstreamReport\x128\n" +
 	"\fstream_start\x18\x02 \x01(\v2\x15.messages.StreamStartR\vstreamStart\x12;\n" +
@@ -2438,7 +2679,9 @@ const file_capturemessage_proto_rawDesc = "" +
 	" \x01(\v2\x17.messages.SipCallFailedR\rsipCallFailed\x128\n" +
 	"\fstream_audio\x18\v \x01(\v2\x15.messages.StreamAudioR\vstreamAudio\x126\n" +
 	"\fesp_sa_event\x18\f \x01(\v2\x14.messages.EspSaEventR\n" +
-	"espSaEvent\"-\n" +
+	"espSaEvent\x125\n" +
+	"\vcall_health\x18\r \x01(\v2\x14.messages.CallHealthR\n" +
+	"callHealth\"-\n" +
 	"\n" +
 	"TrackEntry\x12\x1f\n" +
 	"\vsip_pattern\x18\x01 \x01(\tR\n" +
@@ -2474,85 +2717,91 @@ func file_capturemessage_proto_rawDescGZIP() []byte {
 	return file_capturemessage_proto_rawDescData
 }
 
-var file_capturemessage_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_capturemessage_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_capturemessage_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_capturemessage_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_capturemessage_proto_goTypes = []any{
 	(SipDirection)(0),          // 0: messages.SipDirection
 	(IpAddress_Family)(0),      // 1: messages.IpAddress.Family
 	(SipCallFailed_Reason)(0),  // 2: messages.SipCallFailed.Reason
-	(Command_Op)(0),            // 3: messages.Command.Op
-	(*IpAddress)(nil),          // 4: messages.IpAddress
-	(*EspSaEvent)(nil),         // 5: messages.EspSaEvent
-	(*StreamId)(nil),           // 6: messages.StreamId
-	(*MetricStats)(nil),        // 7: messages.MetricStats
-	(*CaptureStats)(nil),       // 8: messages.CaptureStats
-	(*Stream)(nil),             // 9: messages.Stream
-	(*StreamStart)(nil),        // 10: messages.StreamStart
-	(*StreamFinish)(nil),       // 11: messages.StreamFinish
-	(*StreamGhost)(nil),        // 12: messages.StreamGhost
-	(*StreamAudio)(nil),        // 13: messages.StreamAudio
-	(*InstanceStatistics)(nil), // 14: messages.InstanceStatistics
-	(*SipPeer)(nil),            // 15: messages.SipPeer
-	(*SipCallStart)(nil),       // 16: messages.SipCallStart
-	(*SipCallEnd)(nil),         // 17: messages.SipCallEnd
-	(*SipReinvite)(nil),        // 18: messages.SipReinvite
-	(*SipCallFailed)(nil),      // 19: messages.SipCallFailed
-	(*Event)(nil),              // 20: messages.Event
-	(*TrackEntry)(nil),         // 21: messages.TrackEntry
-	(*Command)(nil),            // 22: messages.Command
-	(*CommandAck)(nil),         // 23: messages.CommandAck
-	(*Stream_SipInfo)(nil),     // 24: messages.Stream.SipInfo
-	(*Stream_EchoPeak)(nil),    // 25: messages.Stream.EchoPeak
-	(*Stream_DtxInfo)(nil),     // 26: messages.Stream.DtxInfo
+	(CallHealth_Code)(0),       // 3: messages.CallHealth.Code
+	(Command_Op)(0),            // 4: messages.Command.Op
+	(*IpAddress)(nil),          // 5: messages.IpAddress
+	(*EspSaEvent)(nil),         // 6: messages.EspSaEvent
+	(*StreamId)(nil),           // 7: messages.StreamId
+	(*MetricStats)(nil),        // 8: messages.MetricStats
+	(*CaptureStats)(nil),       // 9: messages.CaptureStats
+	(*Stream)(nil),             // 10: messages.Stream
+	(*StreamStart)(nil),        // 11: messages.StreamStart
+	(*StreamFinish)(nil),       // 12: messages.StreamFinish
+	(*StreamGhost)(nil),        // 13: messages.StreamGhost
+	(*StreamAudio)(nil),        // 14: messages.StreamAudio
+	(*InstanceStatistics)(nil), // 15: messages.InstanceStatistics
+	(*SipPeer)(nil),            // 16: messages.SipPeer
+	(*SipCallStart)(nil),       // 17: messages.SipCallStart
+	(*SipCallEnd)(nil),         // 18: messages.SipCallEnd
+	(*SipReinvite)(nil),        // 19: messages.SipReinvite
+	(*SipCallFailed)(nil),      // 20: messages.SipCallFailed
+	(*CallHealth)(nil),         // 21: messages.CallHealth
+	(*Event)(nil),              // 22: messages.Event
+	(*TrackEntry)(nil),         // 23: messages.TrackEntry
+	(*Command)(nil),            // 24: messages.Command
+	(*CommandAck)(nil),         // 25: messages.CommandAck
+	(*Stream_SipInfo)(nil),     // 26: messages.Stream.SipInfo
+	(*Stream_EchoPeak)(nil),    // 27: messages.Stream.EchoPeak
+	(*Stream_DtxInfo)(nil),     // 28: messages.Stream.DtxInfo
+	(*CallHealth_Warning)(nil), // 29: messages.CallHealth.Warning
 }
 var file_capturemessage_proto_depIdxs = []int32{
 	1,  // 0: messages.IpAddress.family:type_name -> messages.IpAddress.Family
-	4,  // 1: messages.EspSaEvent.dst:type_name -> messages.IpAddress
-	4,  // 2: messages.StreamId.src:type_name -> messages.IpAddress
-	4,  // 3: messages.StreamId.dst:type_name -> messages.IpAddress
-	6,  // 4: messages.Stream.stream_id:type_name -> messages.StreamId
-	24, // 5: messages.Stream.sip:type_name -> messages.Stream.SipInfo
-	25, // 6: messages.Stream.echolist:type_name -> messages.Stream.EchoPeak
-	26, // 7: messages.Stream.dtx_info:type_name -> messages.Stream.DtxInfo
-	7,  // 8: messages.Stream.jitter:type_name -> messages.MetricStats
-	7,  // 9: messages.Stream.rtt:type_name -> messages.MetricStats
-	7,  // 10: messages.Stream.mos_network:type_name -> messages.MetricStats
-	7,  // 11: messages.Stream.mos_sevana:type_name -> messages.MetricStats
-	6,  // 12: messages.StreamStart.stream_id:type_name -> messages.StreamId
-	6,  // 13: messages.StreamFinish.stream_id:type_name -> messages.StreamId
-	9,  // 14: messages.StreamFinish.report:type_name -> messages.Stream
-	6,  // 15: messages.StreamGhost.stream_id:type_name -> messages.StreamId
-	6,  // 16: messages.StreamAudio.stream_id:type_name -> messages.StreamId
-	8,  // 17: messages.InstanceStatistics.capturers:type_name -> messages.CaptureStats
-	4,  // 18: messages.SipPeer.rtp_addresses:type_name -> messages.IpAddress
-	15, // 19: messages.SipCallStart.caller:type_name -> messages.SipPeer
-	15, // 20: messages.SipCallStart.callee:type_name -> messages.SipPeer
+	5,  // 1: messages.EspSaEvent.dst:type_name -> messages.IpAddress
+	5,  // 2: messages.StreamId.src:type_name -> messages.IpAddress
+	5,  // 3: messages.StreamId.dst:type_name -> messages.IpAddress
+	7,  // 4: messages.Stream.stream_id:type_name -> messages.StreamId
+	26, // 5: messages.Stream.sip:type_name -> messages.Stream.SipInfo
+	27, // 6: messages.Stream.echolist:type_name -> messages.Stream.EchoPeak
+	28, // 7: messages.Stream.dtx_info:type_name -> messages.Stream.DtxInfo
+	8,  // 8: messages.Stream.jitter:type_name -> messages.MetricStats
+	8,  // 9: messages.Stream.rtt:type_name -> messages.MetricStats
+	8,  // 10: messages.Stream.mos_network:type_name -> messages.MetricStats
+	8,  // 11: messages.Stream.mos_sevana:type_name -> messages.MetricStats
+	7,  // 12: messages.StreamStart.stream_id:type_name -> messages.StreamId
+	7,  // 13: messages.StreamFinish.stream_id:type_name -> messages.StreamId
+	10, // 14: messages.StreamFinish.report:type_name -> messages.Stream
+	7,  // 15: messages.StreamGhost.stream_id:type_name -> messages.StreamId
+	7,  // 16: messages.StreamAudio.stream_id:type_name -> messages.StreamId
+	9,  // 17: messages.InstanceStatistics.capturers:type_name -> messages.CaptureStats
+	5,  // 18: messages.SipPeer.rtp_addresses:type_name -> messages.IpAddress
+	16, // 19: messages.SipCallStart.caller:type_name -> messages.SipPeer
+	16, // 20: messages.SipCallStart.callee:type_name -> messages.SipPeer
 	0,  // 21: messages.SipCallEnd.bye_direction:type_name -> messages.SipDirection
 	0,  // 22: messages.SipReinvite.direction:type_name -> messages.SipDirection
-	15, // 23: messages.SipReinvite.updated_peer:type_name -> messages.SipPeer
-	15, // 24: messages.SipCallFailed.caller:type_name -> messages.SipPeer
-	15, // 25: messages.SipCallFailed.callee:type_name -> messages.SipPeer
+	16, // 23: messages.SipReinvite.updated_peer:type_name -> messages.SipPeer
+	16, // 24: messages.SipCallFailed.caller:type_name -> messages.SipPeer
+	16, // 25: messages.SipCallFailed.callee:type_name -> messages.SipPeer
 	2,  // 26: messages.SipCallFailed.reason:type_name -> messages.SipCallFailed.Reason
-	9,  // 27: messages.Event.stream_report:type_name -> messages.Stream
-	10, // 28: messages.Event.stream_start:type_name -> messages.StreamStart
-	11, // 29: messages.Event.stream_finish:type_name -> messages.StreamFinish
-	8,  // 30: messages.Event.capture_stats:type_name -> messages.CaptureStats
-	12, // 31: messages.Event.stream_ghost:type_name -> messages.StreamGhost
-	14, // 32: messages.Event.instance_stats:type_name -> messages.InstanceStatistics
-	16, // 33: messages.Event.sip_call_start:type_name -> messages.SipCallStart
-	17, // 34: messages.Event.sip_call_end:type_name -> messages.SipCallEnd
-	18, // 35: messages.Event.sip_reinvite:type_name -> messages.SipReinvite
-	19, // 36: messages.Event.sip_call_failed:type_name -> messages.SipCallFailed
-	13, // 37: messages.Event.stream_audio:type_name -> messages.StreamAudio
-	5,  // 38: messages.Event.esp_sa_event:type_name -> messages.EspSaEvent
-	3,  // 39: messages.Command.op:type_name -> messages.Command.Op
-	21, // 40: messages.Command.entries:type_name -> messages.TrackEntry
-	21, // 41: messages.CommandAck.current:type_name -> messages.TrackEntry
-	42, // [42:42] is the sub-list for method output_type
-	42, // [42:42] is the sub-list for method input_type
-	42, // [42:42] is the sub-list for extension type_name
-	42, // [42:42] is the sub-list for extension extendee
-	0,  // [0:42] is the sub-list for field type_name
+	29, // 27: messages.CallHealth.warnings:type_name -> messages.CallHealth.Warning
+	10, // 28: messages.Event.stream_report:type_name -> messages.Stream
+	11, // 29: messages.Event.stream_start:type_name -> messages.StreamStart
+	12, // 30: messages.Event.stream_finish:type_name -> messages.StreamFinish
+	9,  // 31: messages.Event.capture_stats:type_name -> messages.CaptureStats
+	13, // 32: messages.Event.stream_ghost:type_name -> messages.StreamGhost
+	15, // 33: messages.Event.instance_stats:type_name -> messages.InstanceStatistics
+	17, // 34: messages.Event.sip_call_start:type_name -> messages.SipCallStart
+	18, // 35: messages.Event.sip_call_end:type_name -> messages.SipCallEnd
+	19, // 36: messages.Event.sip_reinvite:type_name -> messages.SipReinvite
+	20, // 37: messages.Event.sip_call_failed:type_name -> messages.SipCallFailed
+	14, // 38: messages.Event.stream_audio:type_name -> messages.StreamAudio
+	6,  // 39: messages.Event.esp_sa_event:type_name -> messages.EspSaEvent
+	21, // 40: messages.Event.call_health:type_name -> messages.CallHealth
+	4,  // 41: messages.Command.op:type_name -> messages.Command.Op
+	23, // 42: messages.Command.entries:type_name -> messages.TrackEntry
+	23, // 43: messages.CommandAck.current:type_name -> messages.TrackEntry
+	3,  // 44: messages.CallHealth.Warning.code:type_name -> messages.CallHealth.Code
+	45, // [45:45] is the sub-list for method output_type
+	45, // [45:45] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_capturemessage_proto_init() }
@@ -2565,8 +2814,8 @@ func file_capturemessage_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_capturemessage_proto_rawDesc), len(file_capturemessage_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   23,
+			NumEnums:      5,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

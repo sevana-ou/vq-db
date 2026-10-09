@@ -123,6 +123,26 @@ type SipCallFailed struct {
 	Callee          SipPeer
 }
 
+// CallHealth is vq-core's call-level verdict for one SIP call (protobuf
+// CallHealth): problems visible only when the call's RTP streams are compared
+// (one-way audio, codec / ptime / payload asymmetry, late media, one-sided
+// silence). An empty Warnings list means the call was judged healthy.
+type CallHealth struct {
+	CallID      string
+	Timestamp   int64
+	StreamCount int
+	Warnings    []CallHealthWarning
+}
+
+// CallHealthWarning is one call-level problem. Code is the stable lower-case
+// identifier ("one_way_audio", "codec_asym", ...), Tag the short label.
+type CallHealthWarning struct {
+	Code        string   `json:"code"`
+	Tag         string   `json:"tag"`
+	Explanation string   `json:"explanation"`
+	StreamIDs   []string `json:"stream_ids"`
+}
+
 // EspSaEvent records an IPsec ESP security association bound in vq-core's key
 // store (protobuf EspSaEvent), emitted for coverage monitoring. Key bytes are
 // never stored here; HasKeys only records whether they were on the wire.

@@ -33,6 +33,8 @@ func seededApp(t *testing.T) *App {
 	w.AddFinal(model.StreamReport{StreamID: sid, StartMs: 1000, EndMs: 21000, SevanaMOS: fptr(3.7), NetworkMOS: fptr(4.0), Jitter: 10.0, Codec: "opus", FullReport: true, SipCallID: "c1", SipPeerA: "sip:a@h", SipPeerB: "sip:b@h", RTPPacketCounter: 1000, LostPacketCounter: 5})
 	w.AddSipCallStart(model.SipCallStart{CallID: "c1", Timestamp: 1000, SetupCode: 200, Caller: model.SipPeer{Aor: "sip:a@h"}, Callee: model.SipPeer{Aor: "sip:b@h"}})
 	w.AddSipCallEnd(model.SipCallEnd{CallID: "c1", Timestamp: 21000, Duration: 20000, ResponseCodes: []uint32{200}})
+	w.AddCallHealth(model.CallHealth{CallID: "c1", Timestamp: 45000, StreamCount: 1, Warnings: []model.CallHealthWarning{
+		{Code: "one_way_audio", Tag: "One-way audio", Explanation: "Only one RTP stream detected; no return-path media.", StreamIDs: []string{"lnk-1"}}}})
 
 	return NewApp(api.Deps{
 		DB: conn, AgentID: "agent_1", AgentName: "First",
@@ -205,7 +207,8 @@ func TestSipCallsPageRenders(t *testing.T) {
 	}
 	// the call's stream MOS: Sevana 3.70 and network 4.00 from the final report
 	for _, want := range []string{"SIP Calls : 1", "sip:a@h", "/ui/sip-call/c1", "Ok",
-		"Sevana MOS", "Network MOS", ">3.70<", ">4.00<", "worst of 1/1 streams: 3.70"} {
+		"Sevana MOS", "Network MOS", ">3.70<", ">4.00<", "worst of 1/1 streams: 3.70",
+		"⚠ One-way audio", `title="Only one RTP stream detected; no return-path media."`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sip calls page missing %q", want)
 		}
@@ -218,7 +221,8 @@ func TestSipCallDetailRenders(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("code %d", code)
 	}
-	for _, want := range []string{"Call summary", "Established", "Event timeline", "Related RTP streams", "/ui/stream/lnk-1"} {
+	for _, want := range []string{"Call summary", "Established", "Event timeline", "Related RTP streams", "/ui/stream/lnk-1",
+		"Call health", "⚠ One-way audio", "no return-path media"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sip call detail missing %q", want)
 		}
@@ -491,25 +495,5 @@ func TestStreamsFilterContains(t *testing.T) {
 	_, body = get(t, app, "/ui/streams?f_q="+url.QueryEscape(`sip_dst ~ "nobody"`), nil)
 	if strings.Contains(body, "/ui/stream/lnk-1") {
 		t.Error(`sip_dst ~ "nobody" still lists the stream`)
-	}
-}
-
-func TestCallSilence(t *testing.T) {
-	s := func(silent ...bool) []api.CallStreamMos {
-		out := []api.CallStreamMos{}
-		for _, v := range silent {
-			out = append(out, api.CallStreamMos{Silent: v})
-		}
-		return out
-	}
-	cases := map[string][]api.CallStreamMos{"": s(false, false), "one-way": s(false, true), "all": s(true, true)}
-	cases[""] = append(cases[""], s()...)
-	for want, streams := range cases {
-		if got := callSilence(streams); got != want {
-			t.Errorf("callSilence(%v) = %q, want %q", streams, got, want)
-		}
-	}
-	if callSilence(nil) != "" {
-		t.Error("no streams: want empty")
 	}
 }

@@ -57,6 +57,15 @@ var createTableStmts = []string{
 		direction INTEGER,
 		is_request INTEGER
 	)`,
+	// vq-core's call-level verdicts (CallHealth events), one row per verdict;
+	// warnings is a JSON array of {code, tag, explanation, stream_ids}.
+	`CREATE TABLE IF NOT EXISTS rtpmon_call_health (
+		id INTEGER PRIMARY KEY,
+		call_id VARCHAR(1024) NOT NULL,
+		event_timestamp INTEGER NOT NULL,
+		stream_count INTEGER,
+		warnings TEXT
+	)`,
 	`CREATE TABLE IF NOT EXISTS rtpmon_audio (
 		id INTEGER PRIMARY KEY,
 		stream_id INTEGER NOT NULL,
@@ -86,6 +95,8 @@ var createIndexStmts = []string{
 	`CREATE INDEX IF NOT EXISTS idx_sip_events_call_id ON rtpmon_sip_events (call_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_sip_events_event_timestamp ON rtpmon_sip_events (event_timestamp)`,
 	`CREATE INDEX IF NOT EXISTS idx_sip_events_event_type ON rtpmon_sip_events (event_type)`,
+	`CREATE INDEX IF NOT EXISTS idx_call_health_call_id ON rtpmon_call_health (call_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_call_health_event_timestamp ON rtpmon_call_health (event_timestamp)`,
 	`CREATE INDEX IF NOT EXISTS idx_audio_stream_id ON rtpmon_audio (stream_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_audio_start_timestamp ON rtpmon_audio (start_timestamp)`,
 }

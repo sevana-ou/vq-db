@@ -15,15 +15,16 @@ message IpAddress
     uint32 port                         = 4;
 }
 
-// An IPsec ESP security association was bound in vq-core's key store. Published
-// only when server.esp.publish-sa-events is on; key bytes present only under
-// publish-keys. For coverage monitoring.
+// An IPsec ESP security association (or a registration's worth of them) was
+// bound in the key store. Published only when server.esp.publish-sa-events is on;
+// key bytes are present only when server.esp.publish-keys is also on. Emitted for
+// coverage monitoring - proving the tap is harvesting keys in production.
 message EspSaEvent {
     repeated uint32 spis        = 1;   // SPIs bound (one per SA)
     IpAddress dst               = 2;   // SA destination (owner of the SPI)
-    string enc_alg              = 3;
-    string auth_alg             = 4;
-    uint32 source               = 5;   // 0 = harvested, 1 = static file
+    string enc_alg              = 3;   // "null" | "aes-cbc" | "des-ede3-cbc"
+    string auth_alg             = 4;   // "null" | "hmac-md5-96" | "hmac-sha-1-96"
+    uint32 source               = 5;   // 0 = harvested from signalling, 1 = static file
     bytes enc_key               = 6;   // present only under publish-keys
     bytes auth_key              = 7;   // present only under publish-keys
 }
@@ -299,6 +300,38 @@ message SipCallFailed {
     string  reason_phrase    = 8;   // optional reason phrase from the status line
 }
 
+// Call-level health of a SIP call: problems visible only when the call's RTP
+// streams are compared with each other (one-way audio, codec / ptime / payload
+// type asymmetry, late media, one-sided silence). Rules live in vq-net
+// vq_rtp_library/vq_rtp_call_health.* (shared with vq_pcap / pcaptix).
+// Published once per call that ended with a BYE, after its streams finished
+// (a grace period of ~2.5 report intervals after the BYE), and for calls still
+// pending when vq-core shuts down. An empty warnings list means a healthy call.
+message CallHealth {
+    string call_id          = 1;   // SIP Call-ID
+    uint64 timestamp        = 2;   // evaluation time, UNIX ms
+    uint32 stream_count     = 3;   // RTP streams of the call that were judged
+
+    enum Code {
+        CODE_UNSPECIFIED       = 0;
+        CODE_NO_RTP            = 1;   // SIP call without RTP media
+        CODE_ONE_WAY_AUDIO     = 2;   // single stream, or no return-direction stream
+        CODE_CODEC_ASYM        = 3;   // directions use different codecs
+        CODE_PTIME_ASYM        = 4;   // directions use different packetization times
+        CODE_PAYLOAD_ASYM      = 5;   // same codec, different RTP payload types
+        CODE_DURATION_ASYM     = 6;   // one leg much shorter than the other
+        CODE_LATE_MEDIA        = 7;   // one leg started long after the other
+        CODE_ONE_SIDED_SILENCE = 8;   // one direction carries only silence
+    }
+    message Warning {
+        Code   code                 = 1;
+        string tag                  = 2;   // short label, e.g. "Codec asym"
+        string explanation          = 3;   // one sentence for a tooltip
+        repeated string stream_ids  = 4;   // StreamId.uuid of the streams concerned
+    }
+    repeated Warning warnings = 4;
+}
+
 message Event {
     Stream stream_report                                = 1;
     StreamStart stream_start                            = 2;
@@ -315,6 +348,8 @@ message Event {
     StreamAudio stream_audio                            = 11;
 
     EspSaEvent esp_sa_event                             = 12;
+
+    CallHealth call_health                              = 13;
 }
 
 // ---------------------------------------------------------------------------

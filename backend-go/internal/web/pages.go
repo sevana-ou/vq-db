@@ -383,7 +383,17 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 				}
 				row["sevana_mos"] = worstMos(sevana, len(streams))
 				row["network_mos"] = worstMos(network, len(streams))
-				row["silence"] = callSilence(streams)
+			}
+		}
+		// vq-core's call-level warnings (one-way audio, asymmetries, late media,
+		// one-sided silence), shown as chips next to the call status.
+		if health, err := api.GetCallHealth(a.deps.DB, ids); err != nil {
+			data["Error"] = err.Error()
+		} else {
+			for _, row := range rows {
+				if h, ok := health[rawString(row["call_id"])]; ok {
+					row["health"] = h.Warnings
+				}
 			}
 		}
 		data["Rows"] = rows
@@ -409,25 +419,6 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 		data["Pager"] = buildPager(offset, limit, len(rows), count, mk)
 	}
 	a.render(w, r, "sip_calls.html", pageData{Nav: "sip-calls", Title: "SIP calls", Data: data})
-}
-
-// callSilence classifies a call by its silent streams: "one-way" when some
-// directions carry only silence and others do not, "all" when every stream is
-// silent, "" otherwise.
-func callSilence(streams []api.CallStreamMos) string {
-	silent := 0
-	for _, m := range streams {
-		if m.Silent {
-			silent++
-		}
-	}
-	switch {
-	case silent == 0:
-		return ""
-	case silent < len(streams):
-		return "one-way"
-	}
-	return "all"
 }
 
 // worstMos is the MOS pill of a call: its worst stream, with every stream's
@@ -514,7 +505,15 @@ func (a *App) sipCallDetailPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var health any
+	if h, err := api.GetCallHealth(a.deps.DB, []string{callID}); err == nil {
+		if v, ok := h[callID]; ok {
+			health = v
+		}
+	}
+
 	data := map[string]any{
+		"Health":     health,
 		"CallID":     callID,
 		"Events":     buildEventViews(evs),
 		"EventCount": len(evs),

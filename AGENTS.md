@@ -147,8 +147,11 @@ construction (the writer lives on the bus goroutine).
   stream-level silence alarm: SilentCall at or above its IntThresh in >= 90%
   of at least 8 intervals (clean speech reads ~10-35%, pauses only). It feeds
   `silence_suspected` alongside the DTX ratio (`silence_source`:
-  `dtx`/`audio`/`dtx+audio`, `silent_audio_ratio`), and the SIP calls list marks
-  a call "One-way silence" when some of its streams are silent and others not.
+  `dtx`/`audio`/`dtx+audio`, `silent_audio_ratio`). Call-level problems
+  (one-way audio, asymmetries, late media, one-sided silence) come ready-made
+  from vq-core as `CallHealth` events: stored in `rtpmon_call_health` (one row
+  per verdict, warnings as JSON), shown as ⚠ chips in the SIP calls list and on
+  the call detail page, and returned as `health` by `/sip_calls` and `/sip_call`.
 - `internal/worker/` — background workers assembled in `main.go`: `CleanupWorker`
   (record/audio lifetime retention), `TrackSyncWorker` (re-applies persisted
   track patterns if vq-core restarts), and `GhostSweeper` (finalizes ghosts on
