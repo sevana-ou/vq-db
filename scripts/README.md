@@ -63,6 +63,7 @@ database:
   connection: "db=/opt/vq-monitor-db-go/data/vq-monitor.sqlite"
   records-lifetime: 7d
   audio-lifetime: 1d
+  compact: true                # shrink the SQLite file as old data is swept (default; see docs/vq_db_api.md)
 alarm:                          # optional threshold alarms (docs/vq_db_api.md, "Alarms")
   - name: low-network-mos
     counter: network_mos

@@ -127,6 +127,23 @@ func TestBoundedRetentionDefaultsOff(t *testing.T) {
 	if cfg.RecordsLimit != 0 || len(cfg.StoreSipFilter) != 0 {
 		t.Errorf("bounded retention should default off: limit=%d filter=%v", cfg.RecordsLimit, cfg.StoreSipFilter)
 	}
+	if !cfg.Compact {
+		t.Error("database.compact should default on")
+	}
+}
+
+func TestCompactCanBeTurnedOff(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "c.cfg")
+	if err := os.WriteFile(p, []byte("database:\n    engine: sqlite3\n    connection: \"db=x\"\n    compact: false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Compact {
+		t.Error("compact: false not honoured")
+	}
 }
 
 func TestBoundedRetentionParsed(t *testing.T) {

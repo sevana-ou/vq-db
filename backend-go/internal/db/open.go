@@ -21,6 +21,11 @@ import (
 // another connection has committed: SQLite returns SQLITE_BUSY_SNAPSHOT (517)
 // immediately, which busy_timeout does not retry.
 //
+// auto_vacuum(2) (INCREMENTAL) comes first: a new database takes it on before
+// its first table, so the cleanup worker can shrink the file (vacuum.go). On an
+// existing database without auto-vacuum it is a no-op until
+// ConvertToIncrementalVacuum's VACUUM applies it.
+//
 // PostgreSQL and MySQL DSNs are produced by SOCIToDSN, but their drivers are not
 // blank-imported here; wire them in when those engines are actually deployed.
 func Open(engine, connection string) (*sql.DB, error) {
@@ -34,7 +39,7 @@ func Open(engine, connection string) (*sql.DB, error) {
 
 	memory := dsn == ":memory:"
 	if memory {
-		dsn = "file::memory:?cache=shared"
+		dsn = "file::memory:?cache=shared&_pragma=auto_vacuum(2)"
 	} else {
 		dsn += sqliteParams(dsn)
 	}
@@ -61,5 +66,5 @@ func sqliteParams(dsn string) string {
 	if strings.Contains(dsn, "?") {
 		sep = "&"
 	}
-	return sep + "_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_txlock=immediate"
+	return sep + "_pragma=auto_vacuum(2)&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_txlock=immediate"
 }

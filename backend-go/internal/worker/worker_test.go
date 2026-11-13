@@ -314,3 +314,44 @@ func TestRestartRetriesWhileVqcoreStarting(t *testing.T) {
 		t.Errorf("attempts = %d, want retries while vq-core is unreachable", n)
 	}
 }
+
+type fakeCompactor struct {
+	stats   db.VacuumStats
+	err     error
+	budgets []time.Duration
+}
+
+func (f *fakeCompactor) IncrementalVacuum(budget time.Duration) (db.VacuumStats, error) {
+	f.budgets = append(f.budgets, budget)
+	return f.stats, f.err
+}
+
+// With a compactor, each sweep ends with an incremental vacuum and logs it.
+func TestCleanupSweepCompacts(t *testing.T) {
+	logs := captureSlog(t)
+	comp := &fakeCompactor{stats: db.VacuumStats{Steps: 3, Pages: 5000, Bytes: 5000 * 4096, MaxStep: 40 * time.Millisecond}}
+	c := NewCleanupWorker(&fakeCleaner{}, 3600, 0, 0)
+	c.SetCompactor(comp)
+	c.sweep()
+	if len(comp.budgets) != 1 || comp.budgets[0] != compactBudget {
+		t.Errorf("budgets = %v", comp.budgets)
+	}
+	out := logs.String()
+	for _, want := range []string{`msg="cleanup compact"`, "pages=5000", "mb=19", "steps=3", "max_step=40ms"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// Nothing freed: no log line; no compactor: no vacuum.
+func TestCleanupSweepCompactQuietAndOptional(t *testing.T) {
+	logs := captureSlog(t)
+	c := NewCleanupWorker(&fakeCleaner{}, 0, 0, 0)
+	c.SetCompactor(&fakeCompactor{})
+	c.sweep()
+	NewCleanupWorker(&fakeCleaner{}, 0, 0, 0).sweep()
+	if strings.Contains(logs.String(), "compact") {
+		t.Errorf("unexpected log:\n%s", logs.String())
+	}
+}

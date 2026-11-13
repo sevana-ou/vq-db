@@ -60,6 +60,8 @@ database:
     connection:         "db=/opt/vq-monitor-db-go/data/vq-monitor.sqlite"
     records-lifetime:   7d          # expire whole streams + SIP events once all older than this
     audio-lifetime:     1d          # purge stored audio sooner than the record lifetime (audio is heavy)
+    compact:            true        # give swept space back to the filesystem (default); the first start
+                                    # after an upgrade runs a one-time VACUUM before ingest begins
     csv:                /opt/vq-monitor-db-go/data/vq-db.csv
 
     # --- Optional: in-memory + bounded retention (all off by default) ---------

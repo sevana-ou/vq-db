@@ -72,6 +72,11 @@ type Config struct {
 	// StoreSipFilter persists only calls whose SIP source/destination matches one
 	// of these substrings (case-insensitive); empty = store every call.
 	StoreSipFilter []string
+	// Compact (database.compact, default true) keeps an SQLite file from
+	// holding on to the space of deleted rows: a one-time VACUUM at startup
+	// converts an older database to incremental auto-vacuum, and each cleanup
+	// sweep then returns the freed pages to the filesystem.
+	Compact bool
 
 	// Alarms: the top-level `alarm:` list (see AlarmConfig).
 	Alarms []AlarmConfig
@@ -345,6 +350,7 @@ func parse(doc any) *Config {
 	cfg.CSVPath = asString(nestedGet(doc, "database", "csv"))
 	cfg.RecordsLimit = asInt(nestedGet(doc, "database", "records-limit"), 0)
 	cfg.StoreSipFilter = asStringSlice(nestedGet(doc, "database", "store-sip-filter"))
+	cfg.Compact = asBool(nestedGet(doc, "database", "compact"), true)
 	cfg.Alarms = parseAlarms(nestedGet(doc, "alarm"))
 
 	if v := nestedGet(doc, "logging", "level"); v != nil {

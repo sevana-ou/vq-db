@@ -38,7 +38,7 @@ import (
 // version is the vq-db backend's own version. It is a var (not a const) so the
 // build can stamp the real version via -ldflags "-X main.version=…" (see
 // scripts/build_bundle.py); the default here tracks backend-go/VERSION.
-var version = "2.3.0"
+var version = "2.3.1"
 
 func main() {
 	os.Exit(run())
@@ -93,6 +93,9 @@ func run() int {
 		slog.Info("database connection established (in-memory: volatile, not persisted)", "engine", cfg.DBEngine, "target", dbTarget)
 	} else {
 		slog.Info("database connection established", "engine", cfg.DBEngine, "target", dbTarget)
+	}
+	if cfg.Compact {
+		convertToIncrementalVacuum(cfg, conn)
 	}
 	if cfg.RecordsLimit > 0 {
 		writer.SetRecordsLimit(cfg.RecordsLimit)
@@ -169,8 +172,12 @@ func run() int {
 	}
 
 	var cleanup *worker.CleanupWorker
-	if cfg.RecordsLifetimeS > 0 || cfg.AudioLifetimeS > 0 {
+	// records-limit evicts on the writer goroutine; the sweep still compacts.
+	if cfg.RecordsLifetimeS > 0 || cfg.AudioLifetimeS > 0 || (cfg.Compact && cfg.RecordsLimit > 0) {
 		cleanup = worker.NewCleanupWorker(writer, int64(cfg.RecordsLifetimeS), int64(cfg.AudioLifetimeS), 0)
+		if cfg.Compact {
+			cleanup.SetCompactor(writer)
+		}
 		cleanup.Start()
 	}
 
@@ -325,6 +332,32 @@ func buildAlarms(cfg *config.Config, conn *sql.DB) *alarmSet {
 		alarm.StoreNotifier{DB: conn}, set.commands, set.webhooks)
 	slog.Info("alarms configured", "rules", len(rules), "every", alarmCheckEvery)
 	return set
+}
+
+// convertToIncrementalVacuum switches an SQLite file created without
+// auto-vacuum to incremental mode, so the cleanup sweeps can shrink it. The
+// VACUUM rewrites the live data under an exclusive lock, so it runs here, once,
+// before the bus subscriber starts. A failure is logged and vq-db runs on: the
+// database just keeps its size, as before.
+func convertToIncrementalVacuum(cfg *config.Config, conn *sql.DB) {
+	driver, path, err := db.SOCIToDSN(cfg.DBEngine, cfg.DBConnection)
+	if err != nil || driver != db.DriverSQLite || path == ":memory:" {
+		return
+	}
+	if mode, err := db.AutoVacuumMode(conn); err != nil || mode == db.AutoVacuumIncremental {
+		return
+	}
+	slog.Info("compacting database: one-time VACUUM to enable incremental auto-vacuum (ingest starts when it finishes)")
+	st, err := db.ConvertToIncrementalVacuum(conn, path)
+	switch {
+	case err != nil:
+		slog.Error("database compaction failed; the file will not shrink", "err", err)
+	case st.Skipped != "":
+		slog.Warn("database compaction skipped; the file will not shrink until it runs", "reason", st.Skipped)
+	default:
+		slog.Info("database compacted", "mb_before", st.BytesBefore>>20, "mb_after", st.BytesAfter>>20,
+			"took", st.Duration.Round(time.Millisecond))
+	}
 }
 
 // alarmView renders the engine's state and the latest stored state changes

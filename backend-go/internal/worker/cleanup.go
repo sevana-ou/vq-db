@@ -14,15 +14,27 @@ type Cleaner interface {
 	RemoveOldAudio(cutoffMs int64) (int64, error)
 }
 
+// Compactor returns free database pages to the filesystem (satisfied by
+// *db.Writer).
+type Compactor interface {
+	IncrementalVacuum(budget time.Duration) (db.VacuumStats, error)
+}
+
+// compactBudget bounds how long one sweep spends compacting; what is left
+// waits for the next sweep. Each step holds the write lock only briefly.
+const compactBudget = time.Minute
+
 // CleanupWorker periodically purges records / audio older than the configured
-// lifetimes. Port of vq_db/__main__.py::CleanupWorker.
+// lifetimes, then compacts the database file (when a Compactor is set). Port of
+// vq_db/__main__.py::CleanupWorker; the compaction is new in the Go port.
 type CleanupWorker struct {
-	writer   Cleaner
-	recordsS int64
-	audioS   int64
-	interval time.Duration
-	now      func() int64
-	stop     chan struct{}
+	writer    Cleaner
+	compactor Compactor
+	recordsS  int64
+	audioS    int64
+	interval  time.Duration
+	now       func() int64
+	stop      chan struct{}
 }
 
 // NewCleanupWorker constructs a CleanupWorker (interval defaults to 1h).
@@ -36,6 +48,9 @@ func NewCleanupWorker(writer Cleaner, recordsS, audioS int64, interval time.Dura
 		stop: make(chan struct{}),
 	}
 }
+
+// SetCompactor makes every sweep end with an incremental vacuum.
+func (c *CleanupWorker) SetCompactor(comp Compactor) { c.compactor = comp }
 
 // Start runs the periodic sweep until Stop is called.
 func (c *CleanupWorker) Start() {
@@ -86,6 +101,28 @@ func (c *CleanupWorker) sweep() {
 		} else {
 			slog.Info("cleanup remove_old_audio", "chunks", n, "total", time.Since(t).Round(time.Millisecond))
 		}
+	}
+	if c.compactor != nil {
+		c.compact()
+	}
+}
+
+// compact returns the pages the deletes freed to the filesystem. It also picks
+// up pages freed between sweeps (records-limit eviction, per-call purges). Quiet
+// when there was nothing to do.
+func (c *CleanupWorker) compact() {
+	st, err := c.compactor.IncrementalVacuum(compactBudget)
+	attrs := []any{
+		"pages", st.Pages, "mb", st.Bytes >> 20, "steps", st.Steps, "remaining_pages", st.Remaining,
+		"max_step", st.MaxStep.Round(time.Millisecond), "total", st.Total.Round(time.Millisecond),
+	}
+	switch {
+	case err != nil:
+		slog.Error("cleanup compact failed", append(attrs, "err", err)...)
+	case st.Skipped != "":
+		slog.Debug("cleanup compact skipped", "reason", st.Skipped)
+	case st.Pages > 0:
+		slog.Info("cleanup compact", attrs...)
 	}
 }
 

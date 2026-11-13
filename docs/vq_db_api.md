@@ -684,6 +684,8 @@ database:
 
 - **`database.audio-lifetime`** — bounds how long decoded-audio rows are retained, independently of the record lifetime. Once audio is swept, `decoded_filename` on a stream may reference data that is no longer present.
 
+- **`database.compact`** (default `true`, SQLite files only) — gives the space of swept rows back to the filesystem. Without it an SQLite file never shrinks: deleted rows only free pages inside the file for later reuse. vq-db runs SQLite in incremental auto-vacuum mode, and each sweep ends by returning the freed pages, 8 MB per write transaction and at most a minute per sweep (log line `cleanup compact`). A database created before this setting existed is converted once at startup with a full `VACUUM`. It rewrites the live data under an exclusive lock, so ingest starts only when it finishes (log lines `compacting database` / `database compacted`). It is skipped, with a warning, when the disk lacks room for it: about twice the live data next to the database plus 64 MB. A skipped conversion is retried at the next start. `false` turns off both the conversion and the sweeps' compaction.
+
 Clients that need long-term history should export it (the CSV download on `/stats`) before it ages out, or run with the lifetimes set to `0`.
 
 ## Static dashboard

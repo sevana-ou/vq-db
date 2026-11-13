@@ -179,7 +179,7 @@ construction (the writer lives on the bus goroutine).
   for `/alarms` and the dashboard's Alarms page. Never expose a rule's command
   or webhook URL there.
 - `internal/worker/` — background workers assembled in `main.go`: `CleanupWorker`
-  (record/audio lifetime retention), `TrackSyncWorker` (re-applies persisted
+  (record/audio lifetime retention, then file compaction), `TrackSyncWorker` (re-applies persisted
   track patterns if vq-core restarts: at once, when the uptime in vq-core's
   instance statistics goes backwards, plus every `track-resync-interval`), and `GhostSweeper` (finalizes ghosts on
   the bus goroutine via the subscriber's on-idle tick). Workers must never
@@ -197,7 +197,12 @@ build without PVQA (version "... (no PVQA)"); the JSON API is unaffected. The `d
 **bounded retention** (both default off): `records-limit` (keep only the N
 most-recent calls) and `store-sip-filter` (persist only SIP-matching calls) —
 most useful with an in-memory DB (`connection: "db=:memory:"`) to keep bounded
-data in RAM without touching disk. See `backend-go/README.md`.
+data in RAM without touching disk. `database.compact` (default on) keeps the
+SQLite file from growing forever: every connection asks for incremental
+auto-vacuum (DSN pragma in `open.go`), startup converts an older
+`auto_vacuum=NONE` file with a one-time `VACUUM` before the subscriber starts,
+and each cleanup sweep returns the freed pages in short steps
+(`internal/db/vacuum.go`). See `backend-go/README.md`.
 
 API conventions (see `docs/vq_db_api.md`, authoritative): GET-only endpoints,
 plain HTTP without auth (TLS termination is the deployer's problem). On failure
