@@ -134,6 +134,20 @@ construction (the writer lives on the bus goroutine).
   `translate.DecodeEvent`; all timestamps are UNIX milliseconds, mirroring the
   C++ wire shapes. Stream reports carry AMR/EVS **DTX/SID silence** stats
   (`DtxSid/DtxCount/DtxTotal`) and a `LostPacketCounter`.
+- **Decoded audio** arrives in-band on the same bus, not from vq-core's
+  filesystem: a `StreamAudio` event (`stream_id`, a complete PCM16 mono WAV,
+  start/finish ms) accompanies each interval/final report that produced audio.
+  vq-core sends it only when its `server.publish-audio` is on (`true`, or
+  `tracked` for tracked calls only) and the stream got an audio decoder (SIP
+  track list / `max-streams-audio`) — vq-db has no switch of its own.
+  `translate` → `ingest.Pipeline` → `Writer.AddAudio` stores one
+  `rtpmon_audio` row per chunk (base64 text in `audio_wav`), matched by stream
+  id, then by endpoint; a chunk for a stream with no row yet, or with an empty
+  WAV, is **dropped silently** (no log line). `GET /audio?link_id=` joins the
+  chunks with `ConcatWav` (`wav.go`; 404 when nothing is stored) and feeds the
+  player on the stream detail page. `database.audio-lifetime` purges chunks
+  independently of the records. To check a deployment, count `rtpmon_audio`
+  rows — there is no audio counter in the logs or `/summary`.
 - `internal/pvqa/` — PVQA detector / R-factor decomposition for `/report`,
   `/streamhistory` and the CSV export. A detector counts for an interval when
   its cell carries " !" or its value is above that detector's `IntThresh` from
