@@ -212,14 +212,26 @@ reported as not analysable, never with a score.
 
 ## 7. Open decisions
 
-1. **Where the score is computed.** Recommended: rules in vq-net and the tracker in
-   vq-core, so vq_pcap and the desktop app share them. Alternative: publish only the
-   segments and compute in vq-db, which is quicker for tuning thresholds but leaves the
-   other tools without the feature.
-2. **G.711 energy on the capture path** for streams that are not audio-enabled: needs a
-   cost measurement first.
-3. **Ground truth.** Thresholds need recorded calls with known voice agents and known
-   human parties, per codec.
+Decided on 2026-11-13:
+
+- **The score is computed in vq-core**, with the rules in vq-net so vq_pcap and the
+  desktop app share them. vq-db only stores, shows and alarms on it.
+- **The feature is off by default**, behind a config switch, until thresholds are
+  validated.
+- **The wire format is a separate `TurnTaking` event** (section 3.4).
+- **pvqa-v2 exports speech segments with a speech / music label** for streams that send
+  continuous audio (section 5, mitigation 3).
+
+Still open:
+
+1. **G.711 energy on the capture path** for streams that are not audio-enabled: vq-core
+   measures the cost only (confirmed); enabling it is decided after the numbers.
+2. **Ground truth.** Thresholds need recorded calls with known voice agents and known
+   human parties, per codec. The voice-agent recordings will be generated later; until
+   then the mapping from statistics to score is unvalidated.
+
+The work is split into [`TASKS_VQ_CORE.md`](TASKS_VQ_CORE.md) and
+[`TASKS_PVQA_V2.md`](TASKS_PVQA_V2.md).
 
 ## 8. Order of work
 
