@@ -418,6 +418,65 @@ func TestDBSourceCallCounters(t *testing.T) {
 	if s, err := src.Measure(h, now); err != nil || s.Calls != 1 || s.CallHealth != 0 {
 		t.Errorf("call_health for bob = %+v, %v", s, err)
 	}
+
+	// agent_calls: of the calls with a turn-taking score, those with a party at
+	// or above the rule's score. c3 has no score and is not a sample.
+	scored := func(score float64) []model.TurnTakingParty {
+		return []model.TurnTakingParty{{HasScore: true, Score: score}, {HasScore: true, Score: 0.1}}
+	}
+	w.AddTurnTaking(model.TurnTaking{CallID: "c1", Timestamp: now - 5000, Final: true, Parties: scored(0.92)})
+	w.AddTurnTaking(model.TurnTaking{CallID: "c2", Timestamp: now - 5000, Final: true, Parties: scored(0.6)})
+	w.AddTurnTaking(model.TurnTaking{CallID: "c3", Timestamp: now - 5000, Final: true, Parties: []model.TurnTakingParty{{}, {}}})
+	ag, err := NewRule(cfg("agent_calls", 10))
+	if err != nil || ag.Score != 0.7 {
+		t.Fatalf("agent_calls rule = %+v, %v", ag, err)
+	}
+	s, err = src.Measure(ag, now)
+	if v, n, ok := ag.Value(s); err != nil || !ok || n != 2 || int(v) != 50 {
+		t.Errorf("agent_calls = %v over %d (%v), %v", v, n, ok, err)
+	}
+	ag.Score = 0.5
+	if s, _ := src.Measure(ag, now); int(s.AgentCalls) != 100 {
+		t.Errorf("agent_calls from 0.5 = %v", s.AgentCalls)
+	}
+	ag.Filter = `caller ~ "bob"`
+	if s, err := src.Measure(ag, now); err != nil || s.ScoredCalls > 1 {
+		t.Errorf("agent_calls for bob = %+v, %v", s, err)
+	}
+	if _, err := NewRule(config.AlarmConfig{Name: "x", Counter: "jitter", Limit: 1, HasLimit: true, Score: 0.5, Command: "true"}); err == nil {
+		t.Error("score on a counter without one: want an error")
+	}
+}
+
+func TestDBSourceSyntheticStreams(t *testing.T) {
+	conn, err := db.Open("sqlite3", "db=:memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	w := db.NewWriter(conn, "a", "A")
+	if err := w.Bootstrap(); err != nil {
+		t.Fatal(err)
+	}
+	now := int64(10_000_000)
+	add := func(link string, score *float64) {
+		id := model.MediaStreamId{SrcIP: "10.0.0.1", SrcPort: 1, DstIP: "10.0.0.2", DstPort: 2, SSRC: 1, LinkID: link}
+		w.AddFinal(model.StreamReport{StreamID: id, StartMs: now - 60000, EndMs: now - 1000, FullReport: true,
+			HasSynthetic: score != nil, SyntheticScore: score, SyntheticSpeechS: 30})
+	}
+	hi, lo := 0.8, 0.1
+	add("s1", &hi)
+	add("s2", &lo)
+	add("s3", &lo)
+	add("s4", nil) // no score: not a sample
+	r, err := NewRule(config.AlarmConfig{Name: "syn", Counter: "synthetic_streams", Limit: 20, HasLimit: true, Command: "true"})
+	if err != nil || r.Score != 0.5 {
+		t.Fatalf("rule = %+v, %v", r, err)
+	}
+	s, err := (&DBSource{DB: conn}).Measure(r, now)
+	if v, n, ok := r.Value(s); err != nil || !ok || n != 3 || int(v) != 33 || !r.Bad(v) {
+		t.Errorf("synthetic_streams = %v over %d (%v), %v", v, n, ok, err)
+	}
 }
 
 func TestDBSourceCaptureDrops(t *testing.T) {

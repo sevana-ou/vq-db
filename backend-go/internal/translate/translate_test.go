@@ -196,3 +196,44 @@ func TestCallHealth(t *testing.T) {
 		t.Errorf("healthy call warnings = %#v", ok2.Warnings)
 	}
 }
+
+func TestTurnTaking(t *testing.T) {
+	e := &pb.Event{TurnTaking: &pb.TurnTaking{
+		CallId: "c1", Timestamp: 9000, Final: true,
+		Parties: []*pb.TurnTaking_Party{
+			{HasScore: true, Score: 0.92, Turns: 12, SpeechMs: 51430, ReplyGapMedianMs: 1507, ReplyGapIqrMs: 340,
+				Stream: &pb.StreamId{Src: &pb.IpAddress{Ip: []byte{10, 0, 0, 2}, Port: 5000},
+					Dst: &pb.IpAddress{Ip: []byte{10, 0, 0, 1}, Port: 4000}, Ssrc: 0x2222}},
+			{NotAnalysable: "continuous audio"},
+		},
+	}}
+	out, ok := DecodeEvent(e).(model.TurnTaking)
+	if !ok {
+		t.Fatalf("got %T", DecodeEvent(e))
+	}
+	if out.CallID != "c1" || out.Timestamp != 9000 || !out.Final || len(out.Parties) != 2 {
+		t.Fatalf("got %+v", out)
+	}
+	p := out.Parties[0]
+	if !p.HasScore || p.Score != 0.92 || p.Turns != 12 || p.Source != "10.0.0.2:5000" || p.Destination != "10.0.0.1:4000" || p.SSRC != 0x2222 {
+		t.Errorf("party 0 = %+v", p)
+	}
+	if q := out.Parties[1]; q.HasScore || q.Source != "" || q.NotAnalysable != "continuous audio" {
+		t.Errorf("party 1 = %+v", q)
+	}
+}
+
+func TestSyntheticSpeech(t *testing.T) {
+	score := float32(0.18)
+	with := streamReport(&pb.Stream{SyntheticSpeech: &pb.Stream_SyntheticSpeech{Score: &score, SpeechSeconds: 24.15}}, false)
+	if !with.HasSynthetic || with.SyntheticScore == nil || *with.SyntheticScore != 0.18 || with.SyntheticSpeechS != 24.15 {
+		t.Errorf("with score: %+v", with)
+	}
+	early := streamReport(&pb.Stream{SyntheticSpeech: &pb.Stream_SyntheticSpeech{SpeechSeconds: 3}}, false)
+	if !early.HasSynthetic || early.SyntheticScore != nil || early.SyntheticSpeechS != 3 {
+		t.Errorf("too little speech: %+v", early)
+	}
+	if none := streamReport(&pb.Stream{}, false); none.HasSynthetic || none.SyntheticScore != nil {
+		t.Errorf("no analysis: %+v", none)
+	}
+}

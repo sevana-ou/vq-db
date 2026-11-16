@@ -380,7 +380,7 @@ func alarmView(set *alarmSet, conn *sql.DB, events int) api.AlarmView {
 			}
 			view.Rules = append(view.Rules, map[string]any{
 				"name": r.Name, "counter": r.Counter, "op": r.Op.String(), "limit": r.Limit, "unit": r.Unit,
-				"window_s": int(r.Window.Seconds()), "min_samples": r.MinSamples, "filter": r.Filter, "code": r.Code,
+				"window_s": int(r.Window.Seconds()), "min_samples": r.MinSamples, "filter": r.Filter, "code": r.Code, "score": r.Score,
 				"notify": map[string]any{"command": r.Command != "", "webhook": r.Webhook != "", "on_clear": r.OnClear},
 				"state":  state, "value": st.Value, "samples": st.Samples, "measured": st.Measured,
 				"last_check_ms": msOrZero(st.LastCheck), "last_change_ms": msOrZero(st.LastChange), "error": st.LastError,

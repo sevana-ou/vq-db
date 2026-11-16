@@ -31,7 +31,14 @@ type Writer struct {
 	// SIP-matching calls (empty = keep all). See SetRecordsLimit / SetStoreSipFilter.
 	recordsLimit   int
 	storeSipFilter []string
+	// Wall-clock ms of the last stored turn-taking result per call still
+	// running: vq-core sends up to one a second, one in turnTakingEveryMs is kept.
+	turnTakingAt map[string]int64
 }
+
+// A running call's turn-taking result is stored at most this often; the final
+// one always is.
+const turnTakingEveryMs = 5000
 
 // NewWriter constructs a Writer over an open connection.
 func NewWriter(conn *sql.DB, defaultAgentID, defaultAgentName string) *Writer {
@@ -279,6 +286,42 @@ func (w *Writer) AddCallHealth(e model.CallHealth) error {
 	return err
 }
 
+// AddTurnTaking stores a call's turn-taking result, replacing the previous one.
+// A final result is never replaced by a later non-final one (a stray event
+// after the call ended).
+func (w *Writer) AddTurnTaking(e model.TurnTaking) error {
+	now := w.now()
+	if !e.Final {
+		if last, ok := w.turnTakingAt[e.CallID]; ok && now-last < turnTakingEveryMs && now >= last {
+			return nil
+		}
+		if w.turnTakingAt == nil || len(w.turnTakingAt) > 20000 {
+			w.turnTakingAt = map[string]int64{} // calls whose final never came
+		}
+		w.turnTakingAt[e.CallID] = now
+	} else {
+		delete(w.turnTakingAt, e.CallID)
+	}
+	parties := e.Parties
+	if parties == nil {
+		parties = []model.TurnTakingParty{}
+	}
+	js, err := json.Marshal(parties)
+	if err != nil {
+		return err
+	}
+	final := 0
+	if e.Final {
+		final = 1
+	}
+	_, err = w.exec(`INSERT INTO rtpmon_turn_taking (call_id, event_timestamp, final, parties) VALUES (?, ?, ?, ?)
+		ON CONFLICT(call_id) DO UPDATE SET event_timestamp = excluded.event_timestamp,
+			final = excluded.final, parties = excluded.parties
+		WHERE excluded.final = 1 OR rtpmon_turn_taking.final = 0`,
+		e.CallID, e.Timestamp, final, string(js))
+	return err
+}
+
 // ----- maintenance ----- //
 
 // SetProperty upserts a rtpmon_property key/value (check-then-write).
@@ -349,19 +392,24 @@ func (w *Writer) addReport(report model.StreamReport, table string) error {
 	if report.FullReport {
 		flags = 1
 	}
+	var syntheticSpeech any
+	if report.HasSynthetic {
+		syntheticSpeech = report.SyntheticSpeechS
+	}
 	_, err := w.exec(
 		`INSERT INTO `+table+` (
 			stream_id, start_timestamp, end_timestamp, rtp_packet_counter,
 			illegal_packet_counter, lost_packet_counter, sevana_mos, sevana_rfactor,
 			network_mos, jitter, codec, detector_report, rtt_delay, flags, tags,
 			amr_nb_switch_counter, amr_wb_switch_counter, link_id, duration_audio,
-			user_report, dtx_sid, dtx_count, dtx_total
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			user_report, dtx_sid, dtx_count, dtx_total, synthetic_score, synthetic_speech_s
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		dbID, report.StartMs, report.EndMs, report.RTPPacketCounter,
 		report.IllegalPacketCounter, report.LostPacketCounter, nullFloat(report.SevanaMOS), report.SevanaRfactor,
 		nullFloat(report.NetworkMOS), report.Jitter, report.Codec, report.DetectorReport, report.RTTDelay, flags, nil,
 		report.AmrNbSwitchCounter, report.AmrWbSwitchCounter, report.StreamID.LinkID, report.DurationAudio,
 		report.UserReport, report.DtxSid, report.DtxCount, report.DtxTotal,
+		nullFloat(report.SyntheticScore), syntheticSpeech,
 	)
 	return err
 }

@@ -582,6 +582,45 @@ dashboard:
   good-mos-threshold: 3.6   # streams at or above this MOS count as "good"
 ```
 
+## Voice-agent and synthetic-speech estimates
+
+Two estimates come ready-made from vq-core and are stored, returned and shown as they are; vq-db computes neither. **Both are unvalidated cues for trends, alarms and triage, not verdicts on a single call.** Design and limits: `TURN_TAKING.md`, and vq-core's `docs/synthetic-speech/README.md`.
+
+**Turn taking** (vq-core `TurnTaking` events, `server.turn-taking.enabled` in vq-core): during a SIP call, how each party replies to the other and how likely it is an automated voice agent. vq-db keeps the latest result per call in `rtpmon_turn_taking` (a running call's at most every 5 s, the final one always) and returns it as `turn_taking` in every `/sip_calls` row and in `/sip_call`; `null` when the call has none.
+
+```json
+"turn_taking": {
+  "timestamp": 1700000154325,          // capture time of the evaluation, ms
+  "final": true,                        // false while the call runs
+  "parties": [                          // two: one per direction
+    {
+      "stream_id": "b291868b-…",       // the stream this party sends; all zeros for a network-only stream
+      "source": "10.0.0.2:5000", "destination": "10.0.0.1:4000", "ssrc": 8738,   // the same stream; "" when never seen
+      "has_score": true,
+      "score": 0.92,                    // 0 = person .. 1 = automated agent
+      "turns": 12,                      // replies by this party
+      "speech_ms": 51430,
+      "reply_gap_median_ms": 1507, "reply_gap_iqr_ms": 340,
+      "fast_reply_share": 0, "overlap_share": 0,
+      "backchannels": 0, "barge_in_stop_ms": 222,
+      "not_analysable": ""              // or "continuous audio", "music", "no speech"
+    },
+    { … }
+  ]
+}
+```
+
+The dashboard shows a `🤖 Agent 0.92` chip in the SIP calls list when a party scores 0.7 or more, and the per-party table on the call page.
+
+**Synthetic speech score** (PVQA, per decoded stream; needs the `Synthetic Speech` section in vq-core's PVQA config): `/stats` rows (active and finished), `/streamhistory` and `/report` carry
+
+| Field                | Notes                                                                                   |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `synthetic_score`    | 0..1, likelihood that the stream's speech is synthetic; `null` until it holds about 20 s of speech, and when vq-core did not run the analysis |
+| `synthetic_speech_s` | seconds of speech the score rests on; `null` when vq-core did not run the analysis      |
+
+stored in the `synthetic_score` / `synthetic_speech_s` columns of `rtpmon_intervals` and `rtpmon_statistics`. The dashboard shows the score on the stream page and in the call page's stream table, as a `🤖` chip from 0.5.
+
 ## Alarms
 
 vq-db evaluates threshold alarms over the data it stores and notifies a shell command and/or a webhook when a rule enters or leaves the alarm state. Rules are configured in the YAML (there is no API to change them), evaluated every 10 seconds from the database, so they survive restarts and cover every vq-core feeding this vq-db.
@@ -604,6 +643,13 @@ alarm:
     limit:       10                     # percent of the window's calls
     interval:    1h
     webhook:     https://hooks.example.com/vq
+  - name:        voice-agents
+    counter:     agent_calls
+    score:       0.7                    # agent_calls / synthetic_streams only: count from this score (defaults 0.7 / 0.5)
+    limit:       20                     # percent of the window's scored calls
+    interval:    1h
+    min-samples: 10
+    webhook:     https://hooks.example.com/vq
 ```
 
 `name`, `counter`, `limit`, `interval` and `command` are the keys the C++ vq-db documented; existing configurations keep working. A rule needs a `limit` and at least one of `command` / `webhook`; an invalid rule is logged and skipped.
@@ -619,6 +665,8 @@ alarm:
 | `silent_streams`  | streams PVQA analysed               | % carrying only silence (the dashboard's 🔇 rule)             | above        | streams  |
 | `call_health`     | calls vq-core judged in the window  | % with a call-health warning (or with `code`)                 | above        | SIP calls |
 | `failed_calls`    | calls set up or failed in the window| % that failed                                                 | above        | SIP calls |
+| `agent_calls`     | calls with a turn-taking score in the window | % in which a party scores `score` or more as a voice agent (default 0.7) | above | SIP calls |
+| `synthetic_streams` | finished streams with a synthetic speech score | % scoring `score` or more (default 0.5)             | above        | streams  |
 | `capture_drops`   | vq-core's capture                   | packets dropped in the window (hardware/kernel + DPDK buffers) | above       | —        |
 | `free_disk_space` | the database's filesystem           | free share, 0..1                                              | below        | —        |
 

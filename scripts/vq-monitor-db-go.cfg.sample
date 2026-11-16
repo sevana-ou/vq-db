@@ -98,6 +98,7 @@ database:
 #    - name:        low-network-mos
 #      counter:     network_mos          # network_mos sevana_mos r_factor packet_loss jitter duration
 #      limit:       3.6                  # silent_streams call_health failed_calls capture_drops free_disk_space
+#                                        # agent_calls synthetic_streams (with `score:`, the score counted from)
 #      interval:    15m
 #      min-samples: 5
 #      command:     /opt/alarms/notify.sh $network_mos $limit

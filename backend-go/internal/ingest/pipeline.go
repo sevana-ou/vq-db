@@ -88,6 +88,10 @@ func (p *Pipeline) Dispatch(event any) {
 		if err := p.writer.AddCallHealth(e); err != nil {
 			slog.Error("add_call_health failed", "err", err)
 		}
+	case model.TurnTaking:
+		if err := p.writer.AddTurnTaking(e); err != nil {
+			slog.Error("add_turn_taking failed", "err", err)
+		}
 	case model.InstanceStatistics:
 		if p.onInstanceStats != nil {
 			p.onInstanceStats(e)

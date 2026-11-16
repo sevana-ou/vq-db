@@ -166,6 +166,13 @@ construction (the writer lives on the bus goroutine).
   from vq-core as `CallHealth` events: stored in `rtpmon_call_health` (one row
   per verdict, warnings as JSON), shown as ⚠ chips in the SIP calls list and on
   the call detail page, and returned as `health` by `/sip_calls` and `/sip_call`.
+  The voice-agent estimates come ready-made too (`docs/vq_db_api.md`,
+  "Voice-agent and synthetic-speech estimates"): `TurnTaking` events are kept
+  as the latest row per call in `rtpmon_turn_taking` (`Writer.AddTurnTaking`,
+  a running call's at most every 5 s), returned as `turn_taking` and shown as a
+  🤖 chip and a per-party table; `Stream.synthetic_speech` lands in the
+  `synthetic_score` / `synthetic_speech_s` report columns. Alarm counters
+  `agent_calls` and `synthetic_streams` (rule key `score`) measure them.
 - `internal/alarm/` — threshold alarms (the `alarm:` list, documented in
   `docs/vq_db_api.md` "Alarms"): `rule.go` validates a rule and holds the
   counters' default direction; `source.go` measures a rule from SQLite every

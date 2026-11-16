@@ -259,6 +259,63 @@ func CallHealthToJSON(h CallHealth, ok bool) any {
 	}
 }
 
+// TurnTaking is vq-core's latest turn-taking result for one SIP call.
+type TurnTaking struct {
+	Timestamp int64
+	Final     bool
+	Parties   []model.TurnTakingParty
+}
+
+// AgentScore returns the highest agent likelihood among the parties that have
+// a score, and whether any has one.
+func (t TurnTaking) AgentScore() (float64, bool) {
+	best, ok := 0.0, false
+	for _, p := range t.Parties {
+		if p.HasScore && (!ok || p.Score > best) {
+			best, ok = p.Score, true
+		}
+	}
+	return best, ok
+}
+
+// GetTurnTaking returns the turn-taking result of each given call that has one.
+func GetTurnTaking(db *sql.DB, callIDs []string) (map[string]TurnTaking, error) {
+	out := map[string]TurnTaking{}
+	if len(callIDs) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(callIDs))
+	for i, id := range callIDs {
+		args[i] = id
+	}
+	query := "select call_id, event_timestamp, final, parties from rtpmon_turn_taking" +
+		" where call_id in (?" + strings.Repeat(",?", len(callIDs)-1) + ")"
+	rows, err := queryRows(db, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		t := TurnTaking{Timestamp: getI64(r, "event_timestamp"), Final: getI64(r, "final") != 0}
+		if err := json.Unmarshal([]byte(getStr(r, "parties")), &t.Parties); err != nil || t.Parties == nil {
+			t.Parties = []model.TurnTakingParty{}
+		}
+		out[getStr(r, "call_id")] = t
+	}
+	return out, nil
+}
+
+// TurnTakingToJSON shapes a result for the API; nil when the call has none.
+func TurnTakingToJSON(t TurnTaking, ok bool) any {
+	if !ok {
+		return nil
+	}
+	return map[string]any{
+		"timestamp": t.Timestamp,
+		"final":     t.Final,
+		"parties":   t.Parties,
+	}
+}
+
 // GetSipCallEvents returns the full event timeline of one call.
 func GetSipCallEvents(db *sql.DB, callID string) ([]Row, error) {
 	query := "select " + sipEventColumns + " from rtpmon_sip_events where call_id = ? order by event_timestamp, id"
@@ -378,6 +435,7 @@ func reportCols(table string) string {
 		table + ".sevana_mos, " + table + ".sevana_rfactor, " + table + ".network_mos, " + table + ".jitter, " +
 		table + ".codec, " + table + ".detector_report, " + table + ".rtt_delay, " + table + ".duration_audio, " +
 		table + ".dtx_sid, " + table + ".dtx_count, " + table + ".dtx_total, " +
+		table + ".synthetic_score, " + table + ".synthetic_speech_s, " +
 		"rtpmon_streams.sip_source, rtpmon_streams.sip_destination, rtpmon_streams.sip_callid, " +
 		"rtpmon_streams.src_ip, rtpmon_streams.src_port, rtpmon_streams.dst_ip, " +
 		"rtpmon_streams.dst_port, rtpmon_streams.ssrc, rtpmon_streams.link_id"

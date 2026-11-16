@@ -44,7 +44,8 @@
         <td>{{if eq $row.outcome "established"}}<span class="chip positive">Ok</span>
             {{- else if eq $row.outcome "failed"}}<span class="chip danger">Failed</span>
             {{- else}}<span class="chip neutral">Unknown</span>{{end}}
-            {{- range $row.health}} <span class="chip warning" title="{{.Explanation}}">⚠ {{.Tag}}</span>{{end}}</td>
+            {{- range $row.health}} <span class="chip warning" title="{{.Explanation}}">⚠ {{.Tag}}</span>{{end}}
+            {{- with $row.agent}} <span class="chip info" title="A party replies like an automated voice agent (turn-taking score {{.}} of 1). An unvalidated estimate.">🤖 Agent {{.}}</span>{{end}}</td>
         <td>{{sipCode $row}}</td>
         <td>{{if $row.call_id}}<a href="{{$base}}/ui/sip-call/{{queryEsc $row.call_id}}" title="Details">↗</a>{{end}}</td>
       </tr>

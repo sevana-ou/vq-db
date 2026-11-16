@@ -35,6 +35,13 @@ type Snapshot struct {
 	FailedCalls   float64
 	CaptureDrops  float64
 	CaptureKnown  bool // vq-core's capture statistics have arrived
+
+	// Calls with a turn-taking score and the share of them with an agent-like
+	// party; streams with a synthetic speech score and the share scoring synthetic.
+	ScoredCalls      int
+	AgentCalls       float64
+	ScoredStreams    int
+	SyntheticStreams float64
 }
 
 // Value returns the rule's counter from a snapshot and the number of samples
@@ -63,6 +70,10 @@ func (r Rule) Value(s Snapshot) (v float64, samples int, ok bool) {
 		return s.FailedCalls, s.Calls, s.Calls > 0
 	case "capture_drops":
 		return s.CaptureDrops, 1, s.CaptureKnown
+	case "agent_calls":
+		return s.AgentCalls, s.ScoredCalls, s.ScoredCalls > 0
+	case "synthetic_streams":
+		return s.SyntheticStreams, s.ScoredStreams, s.ScoredStreams > 0
 	}
 	return 0, 0, false
 }
@@ -135,6 +146,21 @@ func (s *DBSource) Measure(r Rule, nowMs int64) (Snapshot, error) {
 	if r.Counter == "silent_streams" {
 		if err := s.measureSilent(fromMs, r.Filter, &snap); err != nil {
 			return snap, err
+		}
+	}
+	if r.Counter == "synthetic_streams" {
+		var scored, synthetic sql.NullInt64
+		q := "select count(*), sum(case when rtpmon_statistics.synthetic_score >= ? then 1 else 0 end)" +
+			" from rtpmon_statistics" +
+			" inner join rtpmon_streams on rtpmon_streams.stream_id = rtpmon_statistics.stream_id" +
+			" inner join rtpmon_instances on rtpmon_streams.agent_id = rtpmon_instances.id" +
+			" where rtpmon_statistics.end_timestamp > ? and rtpmon_statistics.synthetic_score is not null" + cond
+		if err := s.DB.QueryRow(q, append([]any{r.Score, fromMs}, args[1:]...)...).Scan(&scored, &synthetic); err != nil {
+			return snap, err
+		}
+		snap.ScoredStreams = int(scored.Int64)
+		if scored.Int64 > 0 {
+			snap.SyntheticStreams = 100 * float64(synthetic.Int64) / float64(scored.Int64)
 		}
 	}
 	return snap, nil
@@ -292,6 +318,42 @@ func (s *DBSource) measureCalls(r Rule, fromMs int64, snap *Snapshot) error {
 		snap.Calls = len(latest)
 		if len(latest) > 0 {
 			snap.CallHealth = 100 * float64(bad) / float64(len(latest))
+		}
+		return nil
+	case "agent_calls":
+		query := "select t.parties from rtpmon_turn_taking t where t.event_timestamp > ?"
+		args := []any{fromMs}
+		if cond != "" {
+			agg := api.SipCallAggregate(" where call_id in (select call_id from rtpmon_turn_taking where event_timestamp > ?)")
+			query += " and t.call_id in (select c.call_id from (" + agg + ") c" + cond + ")"
+			args = append(append(args, fromMs), fargs...)
+		}
+		rows, err := s.DB.Query(query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		scored, agents := 0, 0
+		for rows.Next() {
+			var text string
+			if err := rows.Scan(&text); err != nil {
+				return err
+			}
+			var t api.TurnTaking
+			_ = json.Unmarshal([]byte(text), &t.Parties)
+			if score, ok := t.AgentScore(); ok {
+				scored++
+				if score >= r.Score {
+					agents++
+				}
+			}
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		snap.Calls, snap.ScoredCalls = scored, scored
+		if scored > 0 {
+			snap.AgentCalls = 100 * float64(agents) / float64(scored)
 		}
 		return nil
 	}

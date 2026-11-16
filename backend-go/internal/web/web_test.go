@@ -36,6 +36,10 @@ func seededApp(t *testing.T) *App {
 	w.AddCallHealth(model.CallHealth{CallID: "c1", Timestamp: 45000, StreamCount: 1, Warnings: []model.CallHealthWarning{
 		{Code: "one_way_audio", Tag: "One-way audio", Explanation: "Only one RTP stream detected; no return-path media.", StreamIDs: []string{"lnk-1"}}}})
 
+	w.AddTurnTaking(model.TurnTaking{CallID: "c1", Timestamp: 21000, Final: true, Parties: []model.TurnTakingParty{
+		{Source: "10.0.0.1:5004", HasScore: true, Score: 0.92, Turns: 12, SpeechMs: 51430, ReplyGapMedianMs: 1507, ReplyGapIqrMs: 340},
+		{Source: "10.0.0.2:5060", NotAnalysable: "continuous audio"}}})
+
 	return NewApp(api.Deps{
 		DB: conn, AgentID: "agent_1", AgentName: "First",
 		GoodMosThreshold: 3.6, SilenceRatioThreshold: 0.8, MaxStreams: 50, Version: "2.1.3",
@@ -222,7 +226,8 @@ func TestSipCallDetailRenders(t *testing.T) {
 		t.Fatalf("code %d", code)
 	}
 	for _, want := range []string{"Call summary", "Established", "Event timeline", "Related RTP streams", "/ui/stream/lnk-1",
-		"Call health", "⚠ One-way audio", "no return-path media"} {
+		"Call health", "⚠ One-way audio", "no return-path media",
+		"Turn taking", "🤖 0.92", "1507 ms", "340 ms", "not analysable: continuous audio", "Final result", "Synthetic speech"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sip call detail missing %q", want)
 		}
@@ -530,5 +535,25 @@ func TestAlarmsPage(t *testing.T) {
 	}
 	if code, nav := get(t, app, "/ui/summary", nil); code != 200 || !strings.Contains(nav, "/ui/alarms") {
 		t.Error("navigation has no Alarms entry")
+	}
+}
+
+func TestAgentChipAndSyntheticScore(t *testing.T) {
+	app := seededApp(t)
+	if code, body := get(t, app, "/ui/sip-calls", nil); code != 200 || !strings.Contains(body, "🤖 Agent 0.92") {
+		t.Errorf("sip calls: code %d, agent chip present: %v", code, strings.Contains(body, "🤖 Agent 0.92"))
+	}
+	// The seeded stream has no synthetic score: no row for it on the stream page.
+	if _, body := get(t, app, "/ui/stream/lnk-1", nil); strings.Contains(body, "Synthetic speech score") {
+		t.Error("stream page shows a synthetic score the stream does not have")
+	}
+	if v := syntheticView(nil); v != nil {
+		t.Errorf("no score: %+v", v)
+	}
+	if v := syntheticView(0.61); v == nil || v.Tone != "info" || v.Text != "🤖 0.61" {
+		t.Errorf("0.61: %+v", v)
+	}
+	if v := syntheticView(0.03); v == nil || v.Tone != "neutral" || v.Text != "0.03" {
+		t.Errorf("0.03: %+v", v)
 	}
 }

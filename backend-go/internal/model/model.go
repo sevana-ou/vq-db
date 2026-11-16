@@ -59,10 +59,16 @@ type StreamReport struct {
 	DtxCount             uint64
 	DtxTotal             uint64
 	FullReport           bool // -> rtpmon_*.flags (1 if a full/final report)
-	UserReport           string
-	SipCallID            string
-	SipPeerA             string
-	SipPeerB             string
+	// PVQA's synthetic speech score of the stream so far (protobuf
+	// Stream.synthetic_speech). HasSynthetic is false when vq-core did not run the
+	// analysis; SyntheticScore is nil while the stream holds too little speech.
+	HasSynthetic     bool
+	SyntheticScore   *float64
+	SyntheticSpeechS float64
+	UserReport       string
+	SipCallID        string
+	SipPeerA         string
+	SipPeerB         string
 }
 
 // StreamAudio is a decoded audio chunk published in-band (protobuf StreamAudio).
@@ -132,6 +138,37 @@ type CallHealth struct {
 	Timestamp   int64
 	StreamCount int
 	Warnings    []CallHealthWarning
+}
+
+// TurnTaking is vq-core's estimate, during a SIP call, of how likely each party
+// is an automated voice agent, from conversation timing (protobuf TurnTaking).
+// Each event replaces the previous one of its call; Final marks the last.
+type TurnTaking struct {
+	CallID    string
+	Timestamp int64
+	Final     bool
+	Parties   []TurnTakingParty
+}
+
+// TurnTakingParty is one direction of the call: the stream the party sends and
+// its reply statistics. Source is "ip:port" of the sender, empty when the
+// party's stream was never seen.
+type TurnTakingParty struct {
+	StreamID         string  `json:"stream_id"`
+	Source           string  `json:"source"`
+	Destination      string  `json:"destination"`
+	SSRC             uint32  `json:"ssrc"`
+	HasScore         bool    `json:"has_score"`
+	Score            float64 `json:"score"`
+	Turns            uint32  `json:"turns"`
+	SpeechMs         uint32  `json:"speech_ms"`
+	ReplyGapMedianMs float64 `json:"reply_gap_median_ms"`
+	ReplyGapIqrMs    float64 `json:"reply_gap_iqr_ms"`
+	FastReplyShare   float64 `json:"fast_reply_share"`
+	OverlapShare     float64 `json:"overlap_share"`
+	Backchannels     uint32  `json:"backchannels"`
+	BargeInStopMs    float64 `json:"barge_in_stop_ms"`
+	NotAnalysable    string  `json:"not_analysable"`
 }
 
 // CallHealthWarning is one call-level problem. Code is the stable lower-case

@@ -5,6 +5,8 @@
 package translate
 
 import (
+	"fmt"
+	"math"
 	"net"
 	"strings"
 
@@ -124,6 +126,39 @@ func DecodeEvent(event *pb.Event) any {
 			Callee:          peer(s.GetCallee()),
 		}
 	}
+	if event.GetTurnTaking() != nil {
+		t := event.GetTurnTaking()
+		out := model.TurnTaking{
+			CallID:    t.GetCallId(),
+			Timestamp: int64(t.GetTimestamp()),
+			Final:     t.GetFinal(),
+			Parties:   []model.TurnTakingParty{},
+		}
+		for _, p := range t.GetParties() {
+			party := model.TurnTakingParty{
+				StreamID:         p.GetStreamId(),
+				HasScore:         p.GetHasScore(),
+				Score:            round4(p.GetScore()),
+				Turns:            p.GetTurns(),
+				SpeechMs:         p.GetSpeechMs(),
+				ReplyGapMedianMs: round4(p.GetReplyGapMedianMs()),
+				ReplyGapIqrMs:    round4(p.GetReplyGapIqrMs()),
+				FastReplyShare:   round4(p.GetFastReplyShare()),
+				OverlapShare:     round4(p.GetOverlapShare()),
+				Backchannels:     p.GetBackchannels(),
+				BargeInStopMs:    round4(p.GetBargeInStopMs()),
+				NotAnalysable:    p.GetNotAnalysable(),
+			}
+			if s := p.GetStream(); s != nil {
+				id := streamID(s)
+				party.Source = fmt.Sprintf("%s:%d", id.SrcIP, id.SrcPort)
+				party.Destination = fmt.Sprintf("%s:%d", id.DstIP, id.DstPort)
+				party.SSRC = id.SSRC
+			}
+			out.Parties = append(out.Parties, party)
+		}
+		return out
+	}
 	if event.GetCallHealth() != nil {
 		h := event.GetCallHealth()
 		out := model.CallHealth{
@@ -206,10 +241,30 @@ func peer(msg *pb.SipPeer) model.SipPeer {
 	}
 }
 
+// round4 widens a float32 from the wire without its binary tail (0.92 stays
+// 0.92, not 0.9200000166893005).
+func round4(v float32) float64 {
+	return math.Round(float64(v)*10000) / 10000
+}
+
 func streamReport(msg *pb.Stream, full bool) model.StreamReport {
 	sevana := float64(msg.GetMosSevana().GetCurrent())
 	network := float64(msg.GetMosNetwork().GetCurrent())
+	var hasSynthetic bool
+	var syntheticScore *float64
+	var syntheticSpeech float64
+	if s := msg.GetSyntheticSpeech(); s != nil {
+		hasSynthetic = true
+		syntheticSpeech = round4(s.GetSpeechSeconds())
+		if s.Score != nil {
+			v := round4(s.GetScore())
+			syntheticScore = &v
+		}
+	}
 	return model.StreamReport{
+		HasSynthetic:         hasSynthetic,
+		SyntheticScore:       syntheticScore,
+		SyntheticSpeechS:     syntheticSpeech,
 		StreamID:             streamID(msg.GetStreamId()),
 		StartMs:              int64(msg.GetStartTimestamp()),
 		EndMs:                int64(msg.GetFinishTimestamp()),

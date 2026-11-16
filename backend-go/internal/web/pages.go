@@ -397,6 +397,19 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		// vq-core's turn-taking estimate: a chip when a party replies like an
+		// automated voice agent.
+		if turns, err := api.GetTurnTaking(a.deps.DB, ids); err != nil {
+			data["Error"] = err.Error()
+		} else {
+			for _, row := range rows {
+				if t, ok := turns[rawString(row["call_id"])]; ok {
+					if score, scored := t.AgentScore(); scored && score >= agentChipScore {
+						row["agent"] = fmt.Sprintf("%.2f", score)
+					}
+				}
+			}
+		}
 		data["Rows"] = rows
 		data["Total"] = count
 		mk := func(o, l int) string {
@@ -513,7 +526,15 @@ func (a *App) sipCallDetailPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var turnTaking any
+	if t, err := api.GetTurnTaking(a.deps.DB, []string{callID}); err == nil {
+		if v, ok := t[callID]; ok {
+			turnTaking = buildTurnTakingView(v)
+		}
+	}
+
 	data := map[string]any{
+		"TurnTaking": turnTaking,
 		"Health":     health,
 		"CallID":     callID,
 		"Events":     buildEventViews(evs),
@@ -621,6 +642,10 @@ func (a *App) alarmsPage(w http.ResponseWriter, r *http.Request) {
 		if c := rawString(rule["code"]); c != "" {
 			cond = strings.Replace(cond, "call_health", "call_health["+c+"]", 1)
 		}
+		if sc := toF64(rule["score"]); sc > 0 {
+			name := rawString(rule["counter"])
+			cond = strings.Replace(cond, name, fmt.Sprintf("%s[score ≥ %s]", name, alarmNum(sc)), 1)
+		}
 		if n := toI64(rule["min_samples"]); n > 1 {
 			cond += fmt.Sprintf(", at least %d samples", n)
 		}
@@ -681,4 +706,62 @@ func windowText(s int64) string {
 		return fmt.Sprintf("%d min", s/60)
 	}
 	return fmt.Sprintf("%d s", s)
+}
+
+// A party scoring at least this much on turn taking is shown as a likely
+// voice agent; the same default the agent_calls alarm counter uses.
+const agentChipScore = 0.7
+
+// A stream scoring at least this much on PVQA's synthetic speech score is
+// shown as likely synthetic; the synthetic_streams alarm counter's default.
+const syntheticChipScore = 0.5
+
+type turnTakingPartyView struct {
+	Source        string
+	HasScore      bool
+	Score         string
+	Agent         bool
+	Turns         uint32
+	Speech        string
+	GapMedian     string
+	GapIqr        string
+	FastShare     string
+	OverlapShare  string
+	Backchannels  uint32
+	NotAnalysable string
+}
+
+type turnTakingView struct {
+	Final   bool
+	Time    string
+	Parties []turnTakingPartyView
+}
+
+func buildTurnTakingView(t api.TurnTaking) turnTakingView {
+	v := turnTakingView{Final: t.Final, Time: time.UnixMilli(t.Timestamp).UTC().Format("2006-01-02 15:04:05")}
+	pct := func(x float64) string { return fmt.Sprintf("%.0f%%", 100*x) }
+	for _, p := range t.Parties {
+		source := p.Source
+		if source == "" {
+			source = "not seen"
+		}
+		pv := turnTakingPartyView{
+			Source: source, HasScore: p.HasScore, Turns: p.Turns,
+			Speech:       fmt.Sprintf("%.1f s", float64(p.SpeechMs)/1000),
+			Backchannels: p.Backchannels, NotAnalysable: p.NotAnalysable,
+		}
+		if p.HasScore {
+			pv.Score = fmt.Sprintf("%.2f", p.Score)
+			pv.Agent = p.Score >= agentChipScore
+		}
+		if p.Turns > 0 {
+			pv.GapMedian = fmt.Sprintf("%.0f ms", p.ReplyGapMedianMs)
+			pv.FastShare, pv.OverlapShare = pct(p.FastReplyShare), pct(p.OverlapShare)
+		}
+		if p.Turns >= 4 {
+			pv.GapIqr = fmt.Sprintf("%.0f ms", p.ReplyGapIqrMs)
+		}
+		v.Parties = append(v.Parties, pv)
+	}
+	return v
 }

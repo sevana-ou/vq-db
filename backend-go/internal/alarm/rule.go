@@ -62,13 +62,24 @@ var counters = map[string]counterSpec{
 	"call_health":    {Above, ScopeCalls, "%"},
 	"failed_calls":   {Above, ScopeCalls, "%"},
 	"capture_drops":  {Above, ScopeCapture, "packets"},
+	// Share of the calls with a turn-taking score in which a party scores as an
+	// automated voice agent (vq-core's TurnTaking), and of the streams with a
+	// synthetic speech score that score as synthetic (PVQA). Both scores are
+	// unvalidated cues: these counters are for trends, not for single calls.
+	"agent_calls":       {Above, ScopeCalls, "%"},
+	"synthetic_streams": {Above, ScopeStreams, "%"},
 }
+
+// The score from which agent_calls / synthetic_streams count a call / stream
+// when the rule gives none.
+var defaultScores = map[string]float64{"agent_calls": 0.7, "synthetic_streams": 0.5}
 
 // Counters lists the counter names, for documentation and errors.
 func Counters() []string {
 	out := make([]string, 0, len(counters))
 	for _, name := range []string{"r_factor", "sevana_mos", "network_mos", "packet_loss", "jitter",
-		"duration", "free_disk_space", "silent_streams", "call_health", "failed_calls", "capture_drops"} {
+		"duration", "free_disk_space", "silent_streams", "call_health", "failed_calls", "capture_drops",
+		"agent_calls", "synthetic_streams"} {
 		out = append(out, name)
 	}
 	return out
@@ -84,6 +95,7 @@ type Rule struct {
 	MinSamples int
 	Filter     string
 	Code       string
+	Score      float64 // agent_calls, synthetic_streams: counted from this score
 	Command    string
 	Webhook    string
 	OnClear    bool
@@ -99,7 +111,7 @@ func NewRule(c config.AlarmConfig) (Rule, error) {
 	r := Rule{
 		Name: strings.TrimSpace(c.Name), Counter: c.Counter, Limit: c.Limit,
 		Window: time.Duration(c.IntervalS) * time.Second, MinSamples: c.MinSamples,
-		Filter: strings.TrimSpace(c.Filter), Code: c.Code,
+		Filter: strings.TrimSpace(c.Filter), Code: c.Code, Score: c.Score,
 		Command: strings.TrimSpace(c.Command), Webhook: c.Webhook, OnClear: c.OnClear,
 	}
 	spec, ok := counters[c.Counter]
@@ -133,6 +145,16 @@ func NewRule(c config.AlarmConfig) (Rule, error) {
 	}
 	if r.Webhook != "" && !strings.HasPrefix(r.Webhook, "http://") && !strings.HasPrefix(r.Webhook, "https://") {
 		return r, fmt.Errorf("alarm %q: webhook %q is not an http(s) URL", r.Name, r.Webhook)
+	}
+	if def, scored := defaultScores[r.Counter]; scored {
+		if r.Score == 0 {
+			r.Score = def
+		}
+		if r.Score < 0 || r.Score > 1 {
+			return r, fmt.Errorf("alarm %q: score %v is not within 0..1", r.Name, r.Score)
+		}
+	} else if r.Score != 0 {
+		return r, fmt.Errorf("alarm %q: score applies to the agent_calls and synthetic_streams counters only", r.Name)
 	}
 	if r.Code != "" && r.Counter != "call_health" {
 		return r, fmt.Errorf("alarm %q: code applies to the call_health counter only", r.Name)

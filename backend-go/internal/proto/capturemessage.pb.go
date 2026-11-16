@@ -285,7 +285,7 @@ func (x Command_Op) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Command_Op.Descriptor instead.
 func (Command_Op) EnumDescriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{19, 0}
+	return file_capturemessage_proto_rawDescGZIP(), []int{20, 0}
 }
 
 type IpAddress struct {
@@ -720,9 +720,8 @@ type Stream struct {
 	// Codec
 	Codecname string `protobuf:"bytes,6,opt,name=codecname,proto3" json:"codecname,omitempty"`
 	// Start & finish UNIX timestamp (milliseconds) of THIS report's window:
-	//   - interval (chunk) report  -> [start_timestamp, finish_timestamp] is the chunk
-	//   - final report (StreamFinish.report) -> covers the whole stream
-	//
+	//   * interval (chunk) report  -> [start_timestamp, finish_timestamp] is the chunk
+	//   * final report (StreamFinish.report) -> covers the whole stream
 	// The window duration is finish_timestamp - start_timestamp; there is no
 	// separate duration field (it was always derivable from these two).
 	StartTimestamp  uint64 `protobuf:"varint,7,opt,name=start_timestamp,json=startTimestamp,proto3" json:"start_timestamp,omitempty"`
@@ -745,12 +744,13 @@ type Stream struct {
 	DtxInfo        *Stream_DtxInfo    `protobuf:"bytes,15,opt,name=dtx_info,json=dtxInfo,proto3" json:"dtx_info,omitempty"`
 	// Aggregated metrics (min/max/avg/current). Jitter and RTT are expressed in
 	// milliseconds; the two MOS scores are on the usual 1..5 scale.
-	Jitter        *MetricStats `protobuf:"bytes,16,opt,name=jitter,proto3" json:"jitter,omitempty"`
-	Rtt           *MetricStats `protobuf:"bytes,17,opt,name=rtt,proto3" json:"rtt,omitempty"`
-	MosNetwork    *MetricStats `protobuf:"bytes,18,opt,name=mos_network,json=mosNetwork,proto3" json:"mos_network,omitempty"`
-	MosSevana     *MetricStats `protobuf:"bytes,19,opt,name=mos_sevana,json=mosSevana,proto3" json:"mos_sevana,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Jitter          *MetricStats            `protobuf:"bytes,16,opt,name=jitter,proto3" json:"jitter,omitempty"`
+	Rtt             *MetricStats            `protobuf:"bytes,17,opt,name=rtt,proto3" json:"rtt,omitempty"`
+	MosNetwork      *MetricStats            `protobuf:"bytes,18,opt,name=mos_network,json=mosNetwork,proto3" json:"mos_network,omitempty"`
+	MosSevana       *MetricStats            `protobuf:"bytes,19,opt,name=mos_sevana,json=mosSevana,proto3" json:"mos_sevana,omitempty"`
+	SyntheticSpeech *Stream_SyntheticSpeech `protobuf:"bytes,21,opt,name=synthetic_speech,json=syntheticSpeech,proto3" json:"synthetic_speech,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Stream) Reset() {
@@ -919,6 +919,13 @@ func (x *Stream) GetMosNetwork() *MetricStats {
 func (x *Stream) GetMosSevana() *MetricStats {
 	if x != nil {
 		return x.MosSevana
+	}
+	return nil
+}
+
+func (x *Stream) GetSyntheticSpeech() *Stream_SyntheticSpeech {
+	if x != nil {
+		return x.SyntheticSpeech
 	}
 	return nil
 }
@@ -1915,6 +1922,87 @@ func (x *CallHealth) GetWarnings() []*CallHealth_Warning {
 	return nil
 }
 
+// Live turn-taking score of a SIP call (server.turn-taking, off by default): how
+// likely each party is an automated voice agent, judged from conversation timing -
+// how fast and how regularly it replies to the other party. Talk-spurts come from
+// the RTP streams without decoding (DTX / silence suppression); the two streams of
+// the call are paired by Call-ID and analysed from call establishment on.
+//
+// Published while the call runs, at most once per publish interval (1 s) of capture
+// time once a party has the minimum number of replies, and once more with
+// final = true after the BYE (2.5 report intervals later, or at shutdown). Calls
+// that never reach the minimum publish nothing. Each event replaces the previous
+// one of its call.
+//
+// THE SCORE MAPPING IS A FIRST GUESS: it was not validated on real calls.
+type TurnTaking struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CallId        string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"` // SIP Call-ID
+	Timestamp     uint64                 `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`        // evaluation time, UNIX ms (capture clock: end of the newest talk-spurt)
+	Final         bool                   `protobuf:"varint,3,opt,name=final,proto3" json:"final,omitempty"`                // last result for this call
+	Parties       []*TurnTaking_Party    `protobuf:"bytes,4,rep,name=parties,proto3" json:"parties,omitempty"`             // always two: [0] is the first stream seen, [1] the other
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TurnTaking) Reset() {
+	*x = TurnTaking{}
+	mi := &file_capturemessage_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TurnTaking) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TurnTaking) ProtoMessage() {}
+
+func (x *TurnTaking) ProtoReflect() protoreflect.Message {
+	mi := &file_capturemessage_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TurnTaking.ProtoReflect.Descriptor instead.
+func (*TurnTaking) Descriptor() ([]byte, []int) {
+	return file_capturemessage_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *TurnTaking) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *TurnTaking) GetTimestamp() uint64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *TurnTaking) GetFinal() bool {
+	if x != nil {
+		return x.Final
+	}
+	return false
+}
+
+func (x *TurnTaking) GetParties() []*TurnTaking_Party {
+	if x != nil {
+		return x.Parties
+	}
+	return nil
+}
+
 type Event struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	StreamReport  *Stream                `protobuf:"bytes,1,opt,name=stream_report,json=streamReport,proto3" json:"stream_report,omitempty"`
@@ -1930,13 +2018,14 @@ type Event struct {
 	StreamAudio   *StreamAudio           `protobuf:"bytes,11,opt,name=stream_audio,json=streamAudio,proto3" json:"stream_audio,omitempty"`
 	EspSaEvent    *EspSaEvent            `protobuf:"bytes,12,opt,name=esp_sa_event,json=espSaEvent,proto3" json:"esp_sa_event,omitempty"`
 	CallHealth    *CallHealth            `protobuf:"bytes,13,opt,name=call_health,json=callHealth,proto3" json:"call_health,omitempty"`
+	TurnTaking    *TurnTaking            `protobuf:"bytes,14,opt,name=turn_taking,json=turnTaking,proto3" json:"turn_taking,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Event) Reset() {
 	*x = Event{}
-	mi := &file_capturemessage_proto_msgTypes[17]
+	mi := &file_capturemessage_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1948,7 +2037,7 @@ func (x *Event) String() string {
 func (*Event) ProtoMessage() {}
 
 func (x *Event) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[17]
+	mi := &file_capturemessage_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1961,7 +2050,7 @@ func (x *Event) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Event.ProtoReflect.Descriptor instead.
 func (*Event) Descriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{17}
+	return file_capturemessage_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Event) GetStreamReport() *Stream {
@@ -2055,6 +2144,13 @@ func (x *Event) GetCallHealth() *CallHealth {
 	return nil
 }
 
+func (x *Event) GetTurnTaking() *TurnTaking {
+	if x != nil {
+		return x.TurnTaking
+	}
+	return nil
+}
+
 // One entry of the track list. The pattern is matched case-insensitively as a
 // substring against both peers' SIP AOR (e.g. "alice", "sip:alice@host").
 type TrackEntry struct {
@@ -2066,7 +2162,7 @@ type TrackEntry struct {
 
 func (x *TrackEntry) Reset() {
 	*x = TrackEntry{}
-	mi := &file_capturemessage_proto_msgTypes[18]
+	mi := &file_capturemessage_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2078,7 +2174,7 @@ func (x *TrackEntry) String() string {
 func (*TrackEntry) ProtoMessage() {}
 
 func (x *TrackEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[18]
+	mi := &file_capturemessage_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2091,7 +2187,7 @@ func (x *TrackEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrackEntry.ProtoReflect.Descriptor instead.
 func (*TrackEntry) Descriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{18}
+	return file_capturemessage_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *TrackEntry) GetSipPattern() string {
@@ -2112,7 +2208,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_capturemessage_proto_msgTypes[19]
+	mi := &file_capturemessage_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2124,7 +2220,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[19]
+	mi := &file_capturemessage_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2137,7 +2233,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{19}
+	return file_capturemessage_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Command) GetOp() Command_Op {
@@ -2167,7 +2263,7 @@ type CommandAck struct {
 
 func (x *CommandAck) Reset() {
 	*x = CommandAck{}
-	mi := &file_capturemessage_proto_msgTypes[20]
+	mi := &file_capturemessage_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2179,7 +2275,7 @@ func (x *CommandAck) String() string {
 func (*CommandAck) ProtoMessage() {}
 
 func (x *CommandAck) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[20]
+	mi := &file_capturemessage_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2192,7 +2288,7 @@ func (x *CommandAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandAck.ProtoReflect.Descriptor instead.
 func (*CommandAck) Descriptor() ([]byte, []int) {
-	return file_capturemessage_proto_rawDescGZIP(), []int{20}
+	return file_capturemessage_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CommandAck) GetOk() bool {
@@ -2235,7 +2331,7 @@ type Stream_SipInfo struct {
 
 func (x *Stream_SipInfo) Reset() {
 	*x = Stream_SipInfo{}
-	mi := &file_capturemessage_proto_msgTypes[21]
+	mi := &file_capturemessage_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2247,7 +2343,7 @@ func (x *Stream_SipInfo) String() string {
 func (*Stream_SipInfo) ProtoMessage() {}
 
 func (x *Stream_SipInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[21]
+	mi := &file_capturemessage_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2295,7 +2391,7 @@ type Stream_EchoPeak struct {
 
 func (x *Stream_EchoPeak) Reset() {
 	*x = Stream_EchoPeak{}
-	mi := &file_capturemessage_proto_msgTypes[22]
+	mi := &file_capturemessage_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2307,7 +2403,7 @@ func (x *Stream_EchoPeak) String() string {
 func (*Stream_EchoPeak) ProtoMessage() {}
 
 func (x *Stream_EchoPeak) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[22]
+	mi := &file_capturemessage_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2358,7 +2454,7 @@ type Stream_DtxInfo struct {
 
 func (x *Stream_DtxInfo) Reset() {
 	*x = Stream_DtxInfo{}
-	mi := &file_capturemessage_proto_msgTypes[23]
+	mi := &file_capturemessage_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2370,7 +2466,7 @@ func (x *Stream_DtxInfo) String() string {
 func (*Stream_DtxInfo) ProtoMessage() {}
 
 func (x *Stream_DtxInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[23]
+	mi := &file_capturemessage_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2407,6 +2503,89 @@ func (x *Stream_DtxInfo) GetCountTotal() uint64 {
 	return 0
 }
 
+// Likelihood that the speech of this stream is synthetic (TTS, a voice agent),
+// from the PVQA 'Synthetic Speech' analysis of the decoded audio. Set only for
+// audio-decoded streams and only when the PVQA config has that section. It
+// covers the stream from its start, in interval and final reports alike, and is
+// recomputed about once a minute of audio (covered_seconds says how far it
+// reaches); the reports in between repeat it. A cue for trends and alarms over
+// many streams, not a verdict on one call, and not calibrated.
+type Stream_SyntheticSpeech struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Score          *float32               `protobuf:"fixed32,1,opt,name=score,proto3,oneof" json:"score,omitempty"`                                   // 0..1; unset below about 20 s of speech
+	SpeechSeconds  float32                `protobuf:"fixed32,2,opt,name=speech_seconds,json=speechSeconds,proto3" json:"speech_seconds,omitempty"`    // speech the score rests on
+	Utterances     uint32                 `protobuf:"varint,3,opt,name=utterances,proto3" json:"utterances,omitempty"`                                // utterances that speech is in
+	CoveredSeconds float32                `protobuf:"fixed32,4,opt,name=covered_seconds,json=coveredSeconds,proto3" json:"covered_seconds,omitempty"` // decoded audio of the stream it covers
+	Model          string                 `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`                                           // e.g. "synthetic-2026.11"
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *Stream_SyntheticSpeech) Reset() {
+	*x = Stream_SyntheticSpeech{}
+	mi := &file_capturemessage_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Stream_SyntheticSpeech) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Stream_SyntheticSpeech) ProtoMessage() {}
+
+func (x *Stream_SyntheticSpeech) ProtoReflect() protoreflect.Message {
+	mi := &file_capturemessage_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Stream_SyntheticSpeech.ProtoReflect.Descriptor instead.
+func (*Stream_SyntheticSpeech) Descriptor() ([]byte, []int) {
+	return file_capturemessage_proto_rawDescGZIP(), []int{5, 3}
+}
+
+func (x *Stream_SyntheticSpeech) GetScore() float32 {
+	if x != nil && x.Score != nil {
+		return *x.Score
+	}
+	return 0
+}
+
+func (x *Stream_SyntheticSpeech) GetSpeechSeconds() float32 {
+	if x != nil {
+		return x.SpeechSeconds
+	}
+	return 0
+}
+
+func (x *Stream_SyntheticSpeech) GetUtterances() uint32 {
+	if x != nil {
+		return x.Utterances
+	}
+	return 0
+}
+
+func (x *Stream_SyntheticSpeech) GetCoveredSeconds() float32 {
+	if x != nil {
+		return x.CoveredSeconds
+	}
+	return 0
+}
+
+func (x *Stream_SyntheticSpeech) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
 type CallHealth_Warning struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          CallHealth_Code        `protobuf:"varint,1,opt,name=code,proto3,enum=messages.CallHealth_Code" json:"code,omitempty"`
@@ -2419,7 +2598,7 @@ type CallHealth_Warning struct {
 
 func (x *CallHealth_Warning) Reset() {
 	*x = CallHealth_Warning{}
-	mi := &file_capturemessage_proto_msgTypes[24]
+	mi := &file_capturemessage_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2431,7 +2610,7 @@ func (x *CallHealth_Warning) String() string {
 func (*CallHealth_Warning) ProtoMessage() {}
 
 func (x *CallHealth_Warning) ProtoReflect() protoreflect.Message {
-	mi := &file_capturemessage_proto_msgTypes[24]
+	mi := &file_capturemessage_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2471,6 +2650,147 @@ func (x *CallHealth_Warning) GetExplanation() string {
 func (x *CallHealth_Warning) GetStreamIds() []string {
 	if x != nil {
 		return x.StreamIds
+	}
+	return nil
+}
+
+type TurnTaking_Party struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	StreamId string                 `protobuf:"bytes,1,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"` // StreamId.uuid of the stream this party SENDS
+	// (all zeros for a network-only stream: use `stream`)
+	HasScore         bool      `protobuf:"varint,2,opt,name=has_score,json=hasScore,proto3" json:"has_score,omitempty"`
+	Score            float32   `protobuf:"fixed32,3,opt,name=score,proto3" json:"score,omitempty"`                                                   // 0..1, likelihood of an automated agent
+	Turns            uint32    `protobuf:"varint,4,opt,name=turns,proto3" json:"turns,omitempty"`                                                    // replies by this party the score rests on
+	SpeechMs         uint32    `protobuf:"varint,5,opt,name=speech_ms,json=speechMs,proto3" json:"speech_ms,omitempty"`                              // analysable speech time
+	ReplyGapMedianMs float32   `protobuf:"fixed32,6,opt,name=reply_gap_median_ms,json=replyGapMedianMs,proto3" json:"reply_gap_median_ms,omitempty"` // negative: the party starts before the other stops
+	ReplyGapIqrMs    float32   `protobuf:"fixed32,7,opt,name=reply_gap_iqr_ms,json=replyGapIqrMs,proto3" json:"reply_gap_iqr_ms,omitempty"`          // 0 with fewer than 4 replies
+	FastReplyShare   float32   `protobuf:"fixed32,8,opt,name=fast_reply_share,json=fastReplyShare,proto3" json:"fast_reply_share,omitempty"`         // replies under 300 ms
+	OverlapShare     float32   `protobuf:"fixed32,9,opt,name=overlap_share,json=overlapShare,proto3" json:"overlap_share,omitempty"`                 // replies started before the other party stopped
+	Backchannels     uint32    `protobuf:"varint,10,opt,name=backchannels,proto3" json:"backchannels,omitempty"`                                     // short talk-spurts while the other party kept the floor
+	BargeInStopMs    float32   `protobuf:"fixed32,11,opt,name=barge_in_stop_ms,json=bargeInStopMs,proto3" json:"barge_in_stop_ms,omitempty"`         // median time talked on after being interrupted; 0 = not observed
+	NotAnalysable    string    `protobuf:"bytes,12,opt,name=not_analysable,json=notAnalysable,proto3" json:"not_analysable,omitempty"`               // empty, or "continuous audio", "music", "no speech"
+	Stream           *StreamId `protobuf:"bytes,13,opt,name=stream,proto3" json:"stream,omitempty"`                                                  // the same stream by addresses and SSRC; absent when the
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *TurnTaking_Party) Reset() {
+	*x = TurnTaking_Party{}
+	mi := &file_capturemessage_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TurnTaking_Party) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TurnTaking_Party) ProtoMessage() {}
+
+func (x *TurnTaking_Party) ProtoReflect() protoreflect.Message {
+	mi := &file_capturemessage_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TurnTaking_Party.ProtoReflect.Descriptor instead.
+func (*TurnTaking_Party) Descriptor() ([]byte, []int) {
+	return file_capturemessage_proto_rawDescGZIP(), []int{17, 0}
+}
+
+func (x *TurnTaking_Party) GetStreamId() string {
+	if x != nil {
+		return x.StreamId
+	}
+	return ""
+}
+
+func (x *TurnTaking_Party) GetHasScore() bool {
+	if x != nil {
+		return x.HasScore
+	}
+	return false
+}
+
+func (x *TurnTaking_Party) GetScore() float32 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetTurns() uint32 {
+	if x != nil {
+		return x.Turns
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetSpeechMs() uint32 {
+	if x != nil {
+		return x.SpeechMs
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetReplyGapMedianMs() float32 {
+	if x != nil {
+		return x.ReplyGapMedianMs
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetReplyGapIqrMs() float32 {
+	if x != nil {
+		return x.ReplyGapIqrMs
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetFastReplyShare() float32 {
+	if x != nil {
+		return x.FastReplyShare
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetOverlapShare() float32 {
+	if x != nil {
+		return x.OverlapShare
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetBackchannels() uint32 {
+	if x != nil {
+		return x.Backchannels
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetBargeInStopMs() float32 {
+	if x != nil {
+		return x.BargeInStopMs
+	}
+	return 0
+}
+
+func (x *TurnTaking_Party) GetNotAnalysable() string {
+	if x != nil {
+		return x.NotAnalysable
+	}
+	return ""
+}
+
+func (x *TurnTaking_Party) GetStream() *StreamId {
+	if x != nil {
+		return x.Stream
 	}
 	return nil
 }
@@ -2518,7 +2838,7 @@ const file_capturemessage_proto_rawDesc = "" +
 	"\x19dropped_hw_packet_counter\x18\b \x01(\x04R\x16droppedHwPacketCounter\x128\n" +
 	"\x18erroneous_packet_counter\x18\t \x01(\x04R\x16erroneousPacketCounter\x129\n" +
 	"\x19mbuf_alloc_failed_counter\x18\n" +
-	" \x01(\x04R\x16mbufAllocFailedCounter\"\xaf\t\n" +
+	" \x01(\x04R\x16mbufAllocFailedCounter\"\xbb\v\n" +
 	"\x06Stream\x12/\n" +
 	"\tstream_id\x18\x01 \x01(\v2\x12.messages.StreamIdR\bstreamId\x12,\n" +
 	"\x12rtp_packet_counter\x18\x02 \x01(\x04R\x10rtpPacketCounter\x12;\n" +
@@ -2542,7 +2862,8 @@ const file_capturemessage_proto_rawDesc = "" +
 	"\vmos_network\x18\x12 \x01(\v2\x15.messages.MetricStatsR\n" +
 	"mosNetwork\x124\n" +
 	"\n" +
-	"mos_sevana\x18\x13 \x01(\v2\x15.messages.MetricStatsR\tmosSevana\x1aN\n" +
+	"mos_sevana\x18\x13 \x01(\v2\x15.messages.MetricStatsR\tmosSevana\x12K\n" +
+	"\x10synthetic_speech\x18\x15 \x01(\v2 .messages.Stream.SyntheticSpeechR\x0fsyntheticSpeech\x1aN\n" +
 	"\aSipInfo\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x14\n" +
 	"\x05peer1\x18\x02 \x01(\tR\x05peer1\x12\x14\n" +
@@ -2555,7 +2876,16 @@ const file_capturemessage_proto_rawDesc = "" +
 	"\tcount_sid\x18\x01 \x01(\x04R\bcountSid\x12\x1b\n" +
 	"\tcount_dtx\x18\x02 \x01(\x04R\bcountDtx\x12\x1f\n" +
 	"\vcount_total\x18\x03 \x01(\x04R\n" +
-	"countTotal\">\n" +
+	"countTotal\x1a\xbc\x01\n" +
+	"\x0fSyntheticSpeech\x12\x19\n" +
+	"\x05score\x18\x01 \x01(\x02H\x00R\x05score\x88\x01\x01\x12%\n" +
+	"\x0espeech_seconds\x18\x02 \x01(\x02R\rspeechSeconds\x12\x1e\n" +
+	"\n" +
+	"utterances\x18\x03 \x01(\rR\n" +
+	"utterances\x12'\n" +
+	"\x0fcovered_seconds\x18\x04 \x01(\x02R\x0ecoveredSeconds\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05modelB\b\n" +
+	"\x06_score\">\n" +
 	"\vStreamStart\x12/\n" +
 	"\tstream_id\x18\x01 \x01(\v2\x12.messages.StreamIdR\bstreamId\"i\n" +
 	"\fStreamFinish\x12/\n" +
@@ -2663,7 +2993,28 @@ const file_capturemessage_proto_rawDesc = "" +
 	"\x11CODE_PAYLOAD_ASYM\x10\x05\x12\x16\n" +
 	"\x12CODE_DURATION_ASYM\x10\x06\x12\x13\n" +
 	"\x0fCODE_LATE_MEDIA\x10\a\x12\x1a\n" +
-	"\x16CODE_ONE_SIDED_SILENCE\x10\b\"\x8b\x06\n" +
+	"\x16CODE_ONE_SIDED_SILENCE\x10\b\"\xe3\x04\n" +
+	"\n" +
+	"TurnTaking\x12\x17\n" +
+	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\x12\x14\n" +
+	"\x05final\x18\x03 \x01(\bR\x05final\x124\n" +
+	"\aparties\x18\x04 \x03(\v2\x1a.messages.TurnTaking.PartyR\aparties\x1a\xd1\x03\n" +
+	"\x05Party\x12\x1b\n" +
+	"\tstream_id\x18\x01 \x01(\tR\bstreamId\x12\x1b\n" +
+	"\thas_score\x18\x02 \x01(\bR\bhasScore\x12\x14\n" +
+	"\x05score\x18\x03 \x01(\x02R\x05score\x12\x14\n" +
+	"\x05turns\x18\x04 \x01(\rR\x05turns\x12\x1b\n" +
+	"\tspeech_ms\x18\x05 \x01(\rR\bspeechMs\x12-\n" +
+	"\x13reply_gap_median_ms\x18\x06 \x01(\x02R\x10replyGapMedianMs\x12'\n" +
+	"\x10reply_gap_iqr_ms\x18\a \x01(\x02R\rreplyGapIqrMs\x12(\n" +
+	"\x10fast_reply_share\x18\b \x01(\x02R\x0efastReplyShare\x12#\n" +
+	"\roverlap_share\x18\t \x01(\x02R\foverlapShare\x12\"\n" +
+	"\fbackchannels\x18\n" +
+	" \x01(\rR\fbackchannels\x12'\n" +
+	"\x10barge_in_stop_ms\x18\v \x01(\x02R\rbargeInStopMs\x12%\n" +
+	"\x0enot_analysable\x18\f \x01(\tR\rnotAnalysable\x12*\n" +
+	"\x06stream\x18\r \x01(\v2\x12.messages.StreamIdR\x06stream\"\xc2\x06\n" +
 	"\x05Event\x125\n" +
 	"\rstream_report\x18\x01 \x01(\v2\x10.messages.StreamR\fstreamReport\x128\n" +
 	"\fstream_start\x18\x02 \x01(\v2\x15.messages.StreamStartR\vstreamStart\x12;\n" +
@@ -2681,7 +3032,9 @@ const file_capturemessage_proto_rawDesc = "" +
 	"\fesp_sa_event\x18\f \x01(\v2\x14.messages.EspSaEventR\n" +
 	"espSaEvent\x125\n" +
 	"\vcall_health\x18\r \x01(\v2\x14.messages.CallHealthR\n" +
-	"callHealth\"-\n" +
+	"callHealth\x125\n" +
+	"\vturn_taking\x18\x0e \x01(\v2\x14.messages.TurnTakingR\n" +
+	"turnTaking\"-\n" +
 	"\n" +
 	"TrackEntry\x12\x1f\n" +
 	"\vsip_pattern\x18\x01 \x01(\tR\n" +
@@ -2718,38 +3071,41 @@ func file_capturemessage_proto_rawDescGZIP() []byte {
 }
 
 var file_capturemessage_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_capturemessage_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_capturemessage_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_capturemessage_proto_goTypes = []any{
-	(SipDirection)(0),          // 0: messages.SipDirection
-	(IpAddress_Family)(0),      // 1: messages.IpAddress.Family
-	(SipCallFailed_Reason)(0),  // 2: messages.SipCallFailed.Reason
-	(CallHealth_Code)(0),       // 3: messages.CallHealth.Code
-	(Command_Op)(0),            // 4: messages.Command.Op
-	(*IpAddress)(nil),          // 5: messages.IpAddress
-	(*EspSaEvent)(nil),         // 6: messages.EspSaEvent
-	(*StreamId)(nil),           // 7: messages.StreamId
-	(*MetricStats)(nil),        // 8: messages.MetricStats
-	(*CaptureStats)(nil),       // 9: messages.CaptureStats
-	(*Stream)(nil),             // 10: messages.Stream
-	(*StreamStart)(nil),        // 11: messages.StreamStart
-	(*StreamFinish)(nil),       // 12: messages.StreamFinish
-	(*StreamGhost)(nil),        // 13: messages.StreamGhost
-	(*StreamAudio)(nil),        // 14: messages.StreamAudio
-	(*InstanceStatistics)(nil), // 15: messages.InstanceStatistics
-	(*SipPeer)(nil),            // 16: messages.SipPeer
-	(*SipCallStart)(nil),       // 17: messages.SipCallStart
-	(*SipCallEnd)(nil),         // 18: messages.SipCallEnd
-	(*SipReinvite)(nil),        // 19: messages.SipReinvite
-	(*SipCallFailed)(nil),      // 20: messages.SipCallFailed
-	(*CallHealth)(nil),         // 21: messages.CallHealth
-	(*Event)(nil),              // 22: messages.Event
-	(*TrackEntry)(nil),         // 23: messages.TrackEntry
-	(*Command)(nil),            // 24: messages.Command
-	(*CommandAck)(nil),         // 25: messages.CommandAck
-	(*Stream_SipInfo)(nil),     // 26: messages.Stream.SipInfo
-	(*Stream_EchoPeak)(nil),    // 27: messages.Stream.EchoPeak
-	(*Stream_DtxInfo)(nil),     // 28: messages.Stream.DtxInfo
-	(*CallHealth_Warning)(nil), // 29: messages.CallHealth.Warning
+	(SipDirection)(0),              // 0: messages.SipDirection
+	(IpAddress_Family)(0),          // 1: messages.IpAddress.Family
+	(SipCallFailed_Reason)(0),      // 2: messages.SipCallFailed.Reason
+	(CallHealth_Code)(0),           // 3: messages.CallHealth.Code
+	(Command_Op)(0),                // 4: messages.Command.Op
+	(*IpAddress)(nil),              // 5: messages.IpAddress
+	(*EspSaEvent)(nil),             // 6: messages.EspSaEvent
+	(*StreamId)(nil),               // 7: messages.StreamId
+	(*MetricStats)(nil),            // 8: messages.MetricStats
+	(*CaptureStats)(nil),           // 9: messages.CaptureStats
+	(*Stream)(nil),                 // 10: messages.Stream
+	(*StreamStart)(nil),            // 11: messages.StreamStart
+	(*StreamFinish)(nil),           // 12: messages.StreamFinish
+	(*StreamGhost)(nil),            // 13: messages.StreamGhost
+	(*StreamAudio)(nil),            // 14: messages.StreamAudio
+	(*InstanceStatistics)(nil),     // 15: messages.InstanceStatistics
+	(*SipPeer)(nil),                // 16: messages.SipPeer
+	(*SipCallStart)(nil),           // 17: messages.SipCallStart
+	(*SipCallEnd)(nil),             // 18: messages.SipCallEnd
+	(*SipReinvite)(nil),            // 19: messages.SipReinvite
+	(*SipCallFailed)(nil),          // 20: messages.SipCallFailed
+	(*CallHealth)(nil),             // 21: messages.CallHealth
+	(*TurnTaking)(nil),             // 22: messages.TurnTaking
+	(*Event)(nil),                  // 23: messages.Event
+	(*TrackEntry)(nil),             // 24: messages.TrackEntry
+	(*Command)(nil),                // 25: messages.Command
+	(*CommandAck)(nil),             // 26: messages.CommandAck
+	(*Stream_SipInfo)(nil),         // 27: messages.Stream.SipInfo
+	(*Stream_EchoPeak)(nil),        // 28: messages.Stream.EchoPeak
+	(*Stream_DtxInfo)(nil),         // 29: messages.Stream.DtxInfo
+	(*Stream_SyntheticSpeech)(nil), // 30: messages.Stream.SyntheticSpeech
+	(*CallHealth_Warning)(nil),     // 31: messages.CallHealth.Warning
+	(*TurnTaking_Party)(nil),       // 32: messages.TurnTaking.Party
 }
 var file_capturemessage_proto_depIdxs = []int32{
 	1,  // 0: messages.IpAddress.family:type_name -> messages.IpAddress.Family
@@ -2757,51 +3113,55 @@ var file_capturemessage_proto_depIdxs = []int32{
 	5,  // 2: messages.StreamId.src:type_name -> messages.IpAddress
 	5,  // 3: messages.StreamId.dst:type_name -> messages.IpAddress
 	7,  // 4: messages.Stream.stream_id:type_name -> messages.StreamId
-	26, // 5: messages.Stream.sip:type_name -> messages.Stream.SipInfo
-	27, // 6: messages.Stream.echolist:type_name -> messages.Stream.EchoPeak
-	28, // 7: messages.Stream.dtx_info:type_name -> messages.Stream.DtxInfo
+	27, // 5: messages.Stream.sip:type_name -> messages.Stream.SipInfo
+	28, // 6: messages.Stream.echolist:type_name -> messages.Stream.EchoPeak
+	29, // 7: messages.Stream.dtx_info:type_name -> messages.Stream.DtxInfo
 	8,  // 8: messages.Stream.jitter:type_name -> messages.MetricStats
 	8,  // 9: messages.Stream.rtt:type_name -> messages.MetricStats
 	8,  // 10: messages.Stream.mos_network:type_name -> messages.MetricStats
 	8,  // 11: messages.Stream.mos_sevana:type_name -> messages.MetricStats
-	7,  // 12: messages.StreamStart.stream_id:type_name -> messages.StreamId
-	7,  // 13: messages.StreamFinish.stream_id:type_name -> messages.StreamId
-	10, // 14: messages.StreamFinish.report:type_name -> messages.Stream
-	7,  // 15: messages.StreamGhost.stream_id:type_name -> messages.StreamId
-	7,  // 16: messages.StreamAudio.stream_id:type_name -> messages.StreamId
-	9,  // 17: messages.InstanceStatistics.capturers:type_name -> messages.CaptureStats
-	5,  // 18: messages.SipPeer.rtp_addresses:type_name -> messages.IpAddress
-	16, // 19: messages.SipCallStart.caller:type_name -> messages.SipPeer
-	16, // 20: messages.SipCallStart.callee:type_name -> messages.SipPeer
-	0,  // 21: messages.SipCallEnd.bye_direction:type_name -> messages.SipDirection
-	0,  // 22: messages.SipReinvite.direction:type_name -> messages.SipDirection
-	16, // 23: messages.SipReinvite.updated_peer:type_name -> messages.SipPeer
-	16, // 24: messages.SipCallFailed.caller:type_name -> messages.SipPeer
-	16, // 25: messages.SipCallFailed.callee:type_name -> messages.SipPeer
-	2,  // 26: messages.SipCallFailed.reason:type_name -> messages.SipCallFailed.Reason
-	29, // 27: messages.CallHealth.warnings:type_name -> messages.CallHealth.Warning
-	10, // 28: messages.Event.stream_report:type_name -> messages.Stream
-	11, // 29: messages.Event.stream_start:type_name -> messages.StreamStart
-	12, // 30: messages.Event.stream_finish:type_name -> messages.StreamFinish
-	9,  // 31: messages.Event.capture_stats:type_name -> messages.CaptureStats
-	13, // 32: messages.Event.stream_ghost:type_name -> messages.StreamGhost
-	15, // 33: messages.Event.instance_stats:type_name -> messages.InstanceStatistics
-	17, // 34: messages.Event.sip_call_start:type_name -> messages.SipCallStart
-	18, // 35: messages.Event.sip_call_end:type_name -> messages.SipCallEnd
-	19, // 36: messages.Event.sip_reinvite:type_name -> messages.SipReinvite
-	20, // 37: messages.Event.sip_call_failed:type_name -> messages.SipCallFailed
-	14, // 38: messages.Event.stream_audio:type_name -> messages.StreamAudio
-	6,  // 39: messages.Event.esp_sa_event:type_name -> messages.EspSaEvent
-	21, // 40: messages.Event.call_health:type_name -> messages.CallHealth
-	4,  // 41: messages.Command.op:type_name -> messages.Command.Op
-	23, // 42: messages.Command.entries:type_name -> messages.TrackEntry
-	23, // 43: messages.CommandAck.current:type_name -> messages.TrackEntry
-	3,  // 44: messages.CallHealth.Warning.code:type_name -> messages.CallHealth.Code
-	45, // [45:45] is the sub-list for method output_type
-	45, // [45:45] is the sub-list for method input_type
-	45, // [45:45] is the sub-list for extension type_name
-	45, // [45:45] is the sub-list for extension extendee
-	0,  // [0:45] is the sub-list for field type_name
+	30, // 12: messages.Stream.synthetic_speech:type_name -> messages.Stream.SyntheticSpeech
+	7,  // 13: messages.StreamStart.stream_id:type_name -> messages.StreamId
+	7,  // 14: messages.StreamFinish.stream_id:type_name -> messages.StreamId
+	10, // 15: messages.StreamFinish.report:type_name -> messages.Stream
+	7,  // 16: messages.StreamGhost.stream_id:type_name -> messages.StreamId
+	7,  // 17: messages.StreamAudio.stream_id:type_name -> messages.StreamId
+	9,  // 18: messages.InstanceStatistics.capturers:type_name -> messages.CaptureStats
+	5,  // 19: messages.SipPeer.rtp_addresses:type_name -> messages.IpAddress
+	16, // 20: messages.SipCallStart.caller:type_name -> messages.SipPeer
+	16, // 21: messages.SipCallStart.callee:type_name -> messages.SipPeer
+	0,  // 22: messages.SipCallEnd.bye_direction:type_name -> messages.SipDirection
+	0,  // 23: messages.SipReinvite.direction:type_name -> messages.SipDirection
+	16, // 24: messages.SipReinvite.updated_peer:type_name -> messages.SipPeer
+	16, // 25: messages.SipCallFailed.caller:type_name -> messages.SipPeer
+	16, // 26: messages.SipCallFailed.callee:type_name -> messages.SipPeer
+	2,  // 27: messages.SipCallFailed.reason:type_name -> messages.SipCallFailed.Reason
+	31, // 28: messages.CallHealth.warnings:type_name -> messages.CallHealth.Warning
+	32, // 29: messages.TurnTaking.parties:type_name -> messages.TurnTaking.Party
+	10, // 30: messages.Event.stream_report:type_name -> messages.Stream
+	11, // 31: messages.Event.stream_start:type_name -> messages.StreamStart
+	12, // 32: messages.Event.stream_finish:type_name -> messages.StreamFinish
+	9,  // 33: messages.Event.capture_stats:type_name -> messages.CaptureStats
+	13, // 34: messages.Event.stream_ghost:type_name -> messages.StreamGhost
+	15, // 35: messages.Event.instance_stats:type_name -> messages.InstanceStatistics
+	17, // 36: messages.Event.sip_call_start:type_name -> messages.SipCallStart
+	18, // 37: messages.Event.sip_call_end:type_name -> messages.SipCallEnd
+	19, // 38: messages.Event.sip_reinvite:type_name -> messages.SipReinvite
+	20, // 39: messages.Event.sip_call_failed:type_name -> messages.SipCallFailed
+	14, // 40: messages.Event.stream_audio:type_name -> messages.StreamAudio
+	6,  // 41: messages.Event.esp_sa_event:type_name -> messages.EspSaEvent
+	21, // 42: messages.Event.call_health:type_name -> messages.CallHealth
+	22, // 43: messages.Event.turn_taking:type_name -> messages.TurnTaking
+	4,  // 44: messages.Command.op:type_name -> messages.Command.Op
+	24, // 45: messages.Command.entries:type_name -> messages.TrackEntry
+	24, // 46: messages.CommandAck.current:type_name -> messages.TrackEntry
+	3,  // 47: messages.CallHealth.Warning.code:type_name -> messages.CallHealth.Code
+	7,  // 48: messages.TurnTaking.Party.stream:type_name -> messages.StreamId
+	49, // [49:49] is the sub-list for method output_type
+	49, // [49:49] is the sub-list for method input_type
+	49, // [49:49] is the sub-list for extension type_name
+	49, // [49:49] is the sub-list for extension extendee
+	0,  // [0:49] is the sub-list for field type_name
 }
 
 func init() { file_capturemessage_proto_init() }
@@ -2809,13 +3169,14 @@ func file_capturemessage_proto_init() {
 	if File_capturemessage_proto != nil {
 		return
 	}
+	file_capturemessage_proto_msgTypes[25].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_capturemessage_proto_rawDesc), len(file_capturemessage_proto_rawDesc)),
 			NumEnums:      5,
-			NumMessages:   25,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

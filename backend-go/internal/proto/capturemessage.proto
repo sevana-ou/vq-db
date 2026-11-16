@@ -133,6 +133,23 @@ message Stream {
     MetricStats rtt                     = 17;
     MetricStats mos_network             = 18;
     MetricStats mos_sevana              = 19;
+
+    // Likelihood that the speech of this stream is synthetic (TTS, a voice agent),
+    // from the PVQA 'Synthetic Speech' analysis of the decoded audio. Set only for
+    // audio-decoded streams and only when the PVQA config has that section. It
+    // covers the stream from its start, in interval and final reports alike, and is
+    // recomputed about once a minute of audio (covered_seconds says how far it
+    // reaches); the reports in between repeat it. A cue for trends and alarms over
+    // many streams, not a verdict on one call, and not calibrated.
+    message SyntheticSpeech
+    {
+        optional float score    = 1;   // 0..1; unset below about 20 s of speech
+        float speech_seconds    = 2;   // speech the score rests on
+        uint32 utterances       = 3;   // utterances that speech is in
+        float covered_seconds   = 4;   // decoded audio of the stream it covers
+        string model            = 5;   // e.g. "synthetic-2026.11"
+    }
+    SyntheticSpeech synthetic_speech    = 21;
 }
 
 message StreamStart {
@@ -332,6 +349,44 @@ message CallHealth {
     repeated Warning warnings = 4;
 }
 
+// Live turn-taking score of a SIP call (server.turn-taking, off by default): how
+// likely each party is an automated voice agent, judged from conversation timing -
+// how fast and how regularly it replies to the other party. Talk-spurts come from
+// the RTP streams without decoding (DTX / silence suppression); the two streams of
+// the call are paired by Call-ID and analysed from call establishment on.
+//
+// Published while the call runs, at most once per publish interval (1 s) of capture
+// time once a party has the minimum number of replies, and once more with
+// final = true after the BYE (2.5 report intervals later, or at shutdown). Calls
+// that never reach the minimum publish nothing. Each event replaces the previous
+// one of its call.
+//
+// THE SCORE MAPPING IS A FIRST GUESS: it was not validated on real calls.
+message TurnTaking {
+    string call_id      = 1;   // SIP Call-ID
+    uint64 timestamp    = 2;   // evaluation time, UNIX ms (capture clock: end of the newest talk-spurt)
+    bool   final        = 3;   // last result for this call
+
+    message Party {
+        string stream_id            = 1;   // StreamId.uuid of the stream this party SENDS
+                                           // (all zeros for a network-only stream: use `stream`)
+        bool   has_score            = 2;
+        float  score                = 3;   // 0..1, likelihood of an automated agent
+        uint32 turns                = 4;   // replies by this party the score rests on
+        uint32 speech_ms            = 5;   // analysable speech time
+        float  reply_gap_median_ms  = 6;   // negative: the party starts before the other stops
+        float  reply_gap_iqr_ms     = 7;   // 0 with fewer than 4 replies
+        float  fast_reply_share     = 8;   // replies under 300 ms
+        float  overlap_share        = 9;   // replies started before the other party stopped
+        uint32 backchannels         = 10;  // short talk-spurts while the other party kept the floor
+        float  barge_in_stop_ms     = 11;  // median time talked on after being interrupted; 0 = not observed
+        string not_analysable       = 12;  // empty, or "continuous audio", "music", "no speech"
+        StreamId stream             = 13;  // the same stream by addresses and SSRC; absent when the
+                                           // party's stream was never seen
+    }
+    repeated Party parties = 4;            // always two: [0] is the first stream seen, [1] the other
+}
+
 message Event {
     Stream stream_report                                = 1;
     StreamStart stream_start                            = 2;
@@ -350,6 +405,8 @@ message Event {
     EspSaEvent esp_sa_event                             = 12;
 
     CallHealth call_health                              = 13;
+
+    TurnTaking turn_taking                              = 14;
 }
 
 // ---------------------------------------------------------------------------

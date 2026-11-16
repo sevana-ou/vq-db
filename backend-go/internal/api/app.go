@@ -288,9 +288,16 @@ func (a *App) sipCalls(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
+	turns, err := GetTurnTaking(a.deps.DB, ids)
+	if err != nil {
+		httpError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
 	for i, c := range calls {
 		h, ok := health[ids[i]]
 		c["health"] = CallHealthToJSON(h, ok)
+		t, ok := turns[ids[i]]
+		c["turn_taking"] = TurnTakingToJSON(t, ok)
 	}
 	body["calls"] = calls
 	writeJSON(w, http.StatusOK, body)
@@ -322,6 +329,13 @@ func (a *App) sipCall(w http.ResponseWriter, r *http.Request) {
 	}
 	h, ok := health[callID]
 	body["health"] = CallHealthToJSON(h, ok)
+	turns, err := GetTurnTaking(a.deps.DB, []string{callID})
+	if err != nil {
+		httpError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	t, ok := turns[callID]
+	body["turn_taking"] = TurnTakingToJSON(t, ok)
 	writeJSON(w, http.StatusOK, body)
 }
 

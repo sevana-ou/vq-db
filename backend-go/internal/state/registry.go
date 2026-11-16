@@ -276,20 +276,23 @@ func (r *ActiveStreamRegistry) recordLocked(e *entry) map[string]any {
 		"sevana_mos":     mosOrZero(last.SevanaMOS),
 		"network_mos":    mosOrZero(last.NetworkMOS),
 		"sevana_rfactor": last.SevanaRfactor,
-		"jitter":         last.Jitter,
-		"rtt_delay":      last.RTTDelay,
-		"silence_ratio":  silenceRatio,
-		"duration":       durationMs, // ms
-		"src_ip":         sid.SrcIP,
-		"dst_ip":         sid.DstIP,
-		"src_port":       int64(sid.SrcPort),
-		"dst_port":       int64(sid.DstPort),
-		"ssrc":           decimalString(uint64(sid.SSRC)),
-		"sip_src":        last.SipPeerA,
-		"sip_dst":        last.SipPeerB,
-		"sip_callid":     last.SipCallID,
-		"instance_id":    r.agentID,
-		"instance_name":  r.agentName,
+		// nil (JSON null) until vq-core's reports carry a score
+		"synthetic_score":    syntheticScore(last),
+		"synthetic_speech_s": syntheticSpeech(last),
+		"jitter":             last.Jitter,
+		"rtt_delay":          last.RTTDelay,
+		"silence_ratio":      silenceRatio,
+		"duration":           durationMs, // ms
+		"src_ip":             sid.SrcIP,
+		"dst_ip":             sid.DstIP,
+		"src_port":           int64(sid.SrcPort),
+		"dst_port":           int64(sid.DstPort),
+		"ssrc":               decimalString(uint64(sid.SSRC)),
+		"sip_src":            last.SipPeerA,
+		"sip_dst":            last.SipPeerB,
+		"sip_callid":         last.SipCallID,
+		"instance_id":        r.agentID,
+		"instance_name":      r.agentName,
 		// serialization extras
 		"link_id":             sid.LinkID,
 		"duration_audio":      durationAudio,
@@ -301,4 +304,18 @@ func (r *ActiveStreamRegistry) recordLocked(e *entry) map[string]any {
 		"dtx_total":           int64(dtxTotal),
 		"detector_reports":    detectorReports,
 	}
+}
+
+func syntheticScore(r model.StreamReport) any {
+	if r.SyntheticScore == nil {
+		return nil
+	}
+	return *r.SyntheticScore
+}
+
+func syntheticSpeech(r model.StreamReport) any {
+	if !r.HasSynthetic {
+		return nil
+	}
+	return r.SyntheticSpeechS
 }

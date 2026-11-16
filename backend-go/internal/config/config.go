@@ -376,9 +376,12 @@ type AlarmConfig struct {
 	MinSamples int
 	Filter     string // stream (or call) filter expression, as on the dashboard
 	Code       string // call_health: the warning code to count; empty = any
-	Command    string
-	Webhook    string
-	OnClear    bool // also run the command when the alarm clears
+	// agent_calls / synthetic_streams: the score from which a call / stream is
+	// counted; 0 = the counter's default
+	Score   float64
+	Command string
+	Webhook string
+	OnClear bool // also run the command when the alarm clears
 }
 
 // parseAlarms reads the `alarm:` list. Entries that are not mappings are
@@ -402,6 +405,7 @@ func parseAlarms(v any) []AlarmConfig {
 			MinSamples: asInt(m["min-samples"], 0),
 			Filter:     asString(m["filter"]),
 			Code:       strings.TrimSpace(asString(m["code"])),
+			Score:      asFloat(m["score"], 0),
 			Command:    asString(m["command"]),
 			Webhook:    strings.TrimSpace(asString(m["webhook"])),
 			OnClear:    asBool(m["on-clear"], false),

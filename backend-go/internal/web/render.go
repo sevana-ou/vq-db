@@ -95,6 +95,8 @@ var funcs = template.FuncMap{
 	"sipTime":    sipTime,
 	"sipDur":     sipDur,
 	"raw":        rawString,
+	"isSet":      func(v any) bool { return v != nil },
+	"synth":      syntheticView,
 	"num":        toF64,
 	"i64":        toI64,
 	"add":        func(a, b int) int { return a + b },
@@ -328,4 +330,22 @@ func silenceTip(row map[string]any) string {
 		return "Silence suspected: " + dtx + ", " + audio
 	}
 	return "Silence suspected"
+}
+
+// syntheticChip is PVQA's synthetic speech score as a chip; nil when the
+// stream has no score.
+type syntheticChip struct {
+	Tone string
+	Text string
+}
+
+func syntheticView(v any) *syntheticChip {
+	if v == nil {
+		return nil
+	}
+	score := toF64(v)
+	if score >= syntheticChipScore {
+		return &syntheticChip{Tone: "info", Text: fmt.Sprintf("🤖 %.2f", score)}
+	}
+	return &syntheticChip{Tone: "neutral", Text: fmt.Sprintf("%.2f", score)}
 }

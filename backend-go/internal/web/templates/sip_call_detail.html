@@ -25,6 +25,39 @@
   </dl>
 </div>
 
+{{with .TurnTaking}}
+<div class="card section">
+  <h2>Turn taking</h2>
+  <p class="muted">How each party replies to the other, and how likely it is an automated voice agent (0 = person, 1 = agent).
+    An estimate from conversation timing that was not validated on real calls: for trends and triage, not a verdict on this call.
+    {{if .Final}}Final result{{else}}Call in progress{{end}}, {{.Time}} UTC.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Party (sends from)</th><th>Agent score</th><th title="Replies by this party">Turns</th><th>Speech</th>
+        <th title="Median time from the other party stopping to this party starting">Reply gap</th>
+        <th title="Interquartile range of the reply gaps; narrow means evenly timed replies">Spread</th>
+        <th title="Replies sooner than 300 ms">Fast</th><th title="Replies started before the other party stopped">Overlapping</th>
+        <th title="Short talk-spurts while the other party kept the floor">Backchannels</th>
+      </tr></thead>
+      <tbody>
+        {{range .Parties}}
+        <tr>
+          <td class="mono">{{.Source}}</td>
+          <td>{{if .HasScore}}{{if .Agent}}<span class="chip info">🤖 {{.Score}}</span>{{else}}<span class="chip neutral">{{.Score}}</span>{{end}}
+              {{- else if .NotAnalysable}}<span class="muted">not analysable: {{.NotAnalysable}}</span>
+              {{- else}}<span class="muted">too little speech</span>{{end}}</td>
+          <td class="num">{{.Turns}}</td><td class="num">{{.Speech}}</td>
+          <td class="num">{{.GapMedian}}</td><td class="num">{{.GapIqr}}</td>
+          <td class="num">{{.FastShare}}</td><td class="num">{{.OverlapShare}}</td><td class="num">{{.Backchannels}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
 <div class="card section">
   <h2>Related RTP streams</h2>
   {{if .Streams}}
@@ -32,7 +65,8 @@
     <table>
       <thead><tr>
         <th>Status</th><th>Time</th><th>Source</th><th>Destination</th>
-        {{if $.Sevana}}<th>Sevana MOS</th>{{end}}<th>Network MOS</th><th>Details</th>
+        {{if $.Sevana}}<th>Sevana MOS</th>{{end}}<th>Network MOS</th>
+        <th title="PVQA's likelihood that the speech is synthetic (0..1); needs about 20 s of speech. An uncalibrated cue.">Synthetic speech</th><th>Details</th>
       </tr></thead>
       <tbody>
         {{range .Streams}}
@@ -43,6 +77,7 @@
           <td class="mono">{{.destination}}</td>
           {{if $.Sevana}}<td>{{template "mos-pill" (mos .sevana_mos true)}}</td>{{end}}
           <td>{{template "mos-pill" (mos .network_mos false)}}</td>
+          <td>{{template "synthetic-score" .synthetic_score}}</td>
           <td>{{if .stream_id}}<a href="{{$base}}/ui/stream/{{queryEsc .stream_id}}" title="Details">↗</a>{{end}}</td>
         </tr>
         {{end}}

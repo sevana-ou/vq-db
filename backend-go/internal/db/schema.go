@@ -66,6 +66,14 @@ var createTableStmts = []string{
 		stream_count INTEGER,
 		warnings TEXT
 	)`,
+	// vq-core's turn-taking result (TurnTaking events), the latest per call;
+	// parties is a JSON array of model.TurnTakingParty.
+	`CREATE TABLE IF NOT EXISTS rtpmon_turn_taking (
+		call_id VARCHAR(1024) PRIMARY KEY,
+		event_timestamp INTEGER NOT NULL,
+		final INTEGER NOT NULL,
+		parties TEXT
+	)`,
 	// Alarm state changes (internal/alarm), for the dashboard and the API.
 	`CREATE TABLE IF NOT EXISTS rtpmon_alarm_events (
 		id INTEGER PRIMARY KEY,
@@ -109,6 +117,7 @@ var createIndexStmts = []string{
 	`CREATE INDEX IF NOT EXISTS idx_sip_events_event_type ON rtpmon_sip_events (event_type)`,
 	`CREATE INDEX IF NOT EXISTS idx_call_health_call_id ON rtpmon_call_health (call_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_call_health_event_timestamp ON rtpmon_call_health (event_timestamp)`,
+	`CREATE INDEX IF NOT EXISTS idx_turn_taking_event_timestamp ON rtpmon_turn_taking (event_timestamp)`,
 	`CREATE INDEX IF NOT EXISTS idx_alarm_events_event_timestamp ON rtpmon_alarm_events (event_timestamp)`,
 	`CREATE INDEX IF NOT EXISTS idx_audio_stream_id ON rtpmon_audio (stream_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_audio_start_timestamp ON rtpmon_audio (start_timestamp)`,
@@ -138,7 +147,9 @@ func reportTableDDL(name string) string {
 		user_report TEXT,
 		dtx_sid INTEGER,
 		dtx_count INTEGER,
-		dtx_total INTEGER
+		dtx_total INTEGER,
+		synthetic_score FLOAT,
+		synthetic_speech_s FLOAT
 	)`, name)
 }
 
@@ -165,6 +176,10 @@ func migrate(conn *sql.DB) error {
 		{"dtx_sid", "INTEGER"},
 		{"dtx_count", "INTEGER"},
 		{"dtx_total", "INTEGER"},
+		// PVQA's synthetic speech score: both NULL when vq-core did not run the
+		// analysis, the score alone NULL while there is too little speech.
+		{"synthetic_score", "FLOAT"},
+		{"synthetic_speech_s", "FLOAT"},
 	}
 	for _, table := range []string{"rtpmon_intervals", "rtpmon_statistics"} {
 		existing, err := tableColumns(conn, table)
