@@ -541,10 +541,19 @@ func (a *App) sipCallDetailPage(w http.ResponseWriter, r *http.Request) {
 	}
 	withAudio, _ := api.StreamsWithAudio(a.deps.DB, linkIDs)
 	rows := buildCallStreamRows(streams, turnTaking, withAudio)
+	recorded := 0
+	for _, has := range withAudio {
+		if has {
+			recorded++
+		}
+	}
 
 	data := map[string]any{
 		"TurnTaking": turnTaking,
 		"Rows":       rows,
+		// streams with stored audio: the call recording mixes them
+		"Recorded":   recorded,
+		"CallAudio":  "/call_audio?call_id=" + url.QueryEscape(callID),
 		"Health":     health,
 		"CallID":     callID,
 		"Events":     buildEventViews(evs),

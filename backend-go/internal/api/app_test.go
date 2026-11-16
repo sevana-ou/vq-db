@@ -261,3 +261,38 @@ func TestAlarmsEndpoint(t *testing.T) {
 		t.Error("/alarms has no instance envelope")
 	}
 }
+
+func TestCallAudioEndpoint(t *testing.T) {
+	app := seededApp(t)
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/call_audio?call_id=c1", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("call without audio: code %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/call_audio", nil))
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("no call_id: code %d", rec.Code)
+	}
+
+	sid := model.MediaStreamId{SrcIP: "10.0.0.1", SrcPort: 5004, DstIP: "10.0.0.2", DstPort: 5060, SSRC: 0x1234, LinkID: "lnk-1"}
+	w := db.NewWriter(app.deps.DB, "agent_1", "First")
+	w.OpenStream(sid)
+	w.AddInterval(model.StreamReport{StreamID: sid, StartMs: 1000, EndMs: 2000, SipCallID: "c1"})
+	if err := w.AddAudio(model.StreamAudio{StreamID: sid, Wav: wavOf(8000, 8000, 77), StartMs: 1000, FinishMs: 2000}); err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/call_audio?call_id=c1", nil))
+	if rec.Code != 200 || rec.Header().Get("Content-Type") != "audio/wav" || rec.Body.Len() != 44+16000 {
+		t.Errorf("call audio: code %d, type %q, %d bytes", rec.Code, rec.Header().Get("Content-Type"), rec.Body.Len())
+	}
+	// A player seeks with range requests.
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/call_audio?call_id=c1&layout=stereo", nil)
+	req.Header.Set("Range", "bytes=0-3")
+	app.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusPartialContent || rec.Body.String() != "RIFF" {
+		t.Errorf("range request: code %d, body %q", rec.Code, rec.Body.String())
+	}
+}

@@ -623,3 +623,24 @@ func TestCallPagePlayButton(t *testing.T) {
 		t.Error("no Play button for a stream with audio")
 	}
 }
+
+func TestCallRecordingPlayer(t *testing.T) {
+	app := seededApp(t)
+	if _, body := get(t, app, "/ui/sip-call/c1", nil); strings.Contains(body, "Call recording") {
+		t.Error("recording card for a call without audio")
+	}
+	wav := append([]byte("RIFF\x28\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00\x80\x3e\x00\x00\x02\x00\x10\x00data\x04\x00\x00\x00"), 1, 0, 2, 0)
+	sid := model.MediaStreamId{SrcIP: "10.0.0.1", SrcPort: 5004, DstIP: "10.0.0.2", DstPort: 5060, SSRC: 0x1234, LinkID: "lnk-1"}
+	w := db.NewWriter(app.deps.DB, "agent_1", "First")
+	w.OpenStream(sid)
+	w.AddInterval(model.StreamReport{StreamID: sid, StartMs: 1000, EndMs: 2000, SipCallID: "c1"})
+	if err := w.AddAudio(model.StreamAudio{StreamID: sid, Wav: wav, StartMs: 1000, FinishMs: 2000}); err != nil {
+		t.Fatal(err)
+	}
+	_, body := get(t, app, "/ui/sip-call/c1", nil)
+	for _, want := range []string{"Call recording", `src="/call_audio?call_id=c1"`, "Download WAV"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("call page missing %q", want)
+		}
+	}
+}

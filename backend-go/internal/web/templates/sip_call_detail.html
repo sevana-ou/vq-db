@@ -25,6 +25,18 @@
   </dl>
 </div>
 
+{{if .Recorded}}
+<div class="card section">
+  <h2>Call recording</h2>
+  <p class="muted">{{if eq .Recorded 1}}The one stream of this call with stored audio.{{else}}The {{.Recorded}} streams of this call with stored audio, mixed on the call's timeline.{{end}}
+    The audio vq-core decoded, 16 kHz; for a call still in progress, what has arrived so far.</p>
+  <audio controls preload="none" src="{{$base}}{{.CallAudio}}"
+         onerror="this.outerHTML='<p class=&quot;muted&quot;>The recording could not be loaded.</p>'"></audio>
+  <p><a class="btn" href="{{$base}}{{.CallAudio}}" download="call.wav">⭳ Download WAV</a>
+     {{if gt .Recorded 1}}<a class="btn" href="{{$base}}{{.CallAudio}}&amp;layout=stereo" download="call-stereo.wav" title="One party per channel">⭳ Stereo, one party per channel</a>{{end}}</p>
+</div>
+{{end}}
+
 <div class="card section">
   <h2>RTP streams</h2>
   {{$tt := .TurnTaking}}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sevana-ou/vq-db/internal/bus"
 	"github.com/sevana-ou/vq-db/internal/filter"
@@ -87,6 +89,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /alarms", a.alarms)
 	mux.HandleFunc("GET /sip_events", a.sipEvents)
 	mux.HandleFunc("GET /audio", a.audio)
+	mux.HandleFunc("GET /call_audio", a.callAudio)
 	mux.HandleFunc("GET /streamhistory", a.streamHistory)
 	mux.HandleFunc("GET /report", a.report)
 	mux.HandleFunc("GET /stats", a.stats)
@@ -391,6 +394,38 @@ func (a *App) audio(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+linkID+`.wav"`)
 	w.WriteHeader(http.StatusOK)
 	w.Write(wav)
+}
+
+// callAudio serves a call's recording: the stored audio of its RTP streams on
+// one timeline, mixed (layout=mono, the default) or one party per channel
+// (layout=stereo). Served with range support, so a player can seek.
+func (a *App) callAudio(w http.ResponseWriter, r *http.Request) {
+	callID := r.URL.Query().Get("call_id")
+	if callID == "" {
+		httpError(w, http.StatusUnprocessableEntity, "call_id is required")
+		return
+	}
+	chunks, err := GetCallAudioChunks(a.deps.DB, callID)
+	if err != nil {
+		httpError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	wav, err := MixCallAudio(chunks, r.URL.Query().Get("layout") == "stereo")
+	if errors.Is(err, ErrMixTooLong) {
+		httpError(w, http.StatusRequestEntityTooLarge, "The call is too long to mix; play its streams one by one.")
+		return
+	}
+	if err != nil {
+		httpError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	if len(wav) == 0 {
+		httpError(w, http.StatusNotFound, "No audio stored for this call.")
+		return
+	}
+	w.Header().Set("Content-Type", "audio/wav")
+	w.Header().Set("Content-Disposition", `inline; filename="call.wav"`)
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(wav))
 }
 
 func (a *App) streamHistory(w http.ResponseWriter, r *http.Request) {

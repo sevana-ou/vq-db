@@ -582,6 +582,19 @@ dashboard:
   good-mos-threshold: 3.6   # streams at or above this MOS count as "good"
 ```
 
+## Call recording
+
+`GET /call_audio?call_id=<Call-ID>[&layout=stereo]` returns the call as one WAV: the stored audio of every RTP stream of the call (`rtpmon_audio`, so only streams vq-core decoded and published audio for), each laid on the call's timeline by its capture timestamps, and mixed.
+
+| Parameter | Notes |
+| --------- | ----- |
+| `call_id` | required; the SIP Call-ID, as in `/sip_calls` |
+| `layout`  | `mono` (default): all streams summed. `stereo`: the stream that starts first on the left channel, the second on the right, further ones alternating |
+
+16-bit PCM at 16 kHz when the stored audio is at a multiple of it (vq-core stores 48 kHz), otherwise at the lowest stored rate. Served with HTTP range support, so a player can seek. `404` when no stream of the call has audio; `413` for a call longer than 4 hours. For a call in progress it holds what has arrived so far. A stretch a stream has no audio for (a gap of more than 0.3 s between its stored pieces) is silence. The streams are aligned by vq-core's capture clock, to within the few tens of milliseconds its decoder runs behind the wire; it is what a recorder at the probe would have heard, not what either party heard.
+
+The dashboard's call page plays it in a "Call recording" card (with downloads, mono and stereo) whenever a stream of the call has audio; the per-stream Play buttons remain.
+
 ## Voice-agent and synthetic-speech estimates
 
 Two estimates come ready-made from vq-core and are stored, returned and shown as they are; vq-db computes neither. **Both are unvalidated cues for trends, alarms and triage, not verdicts on a single call.** Design and limits: `TURN_TAKING.md`, and vq-core's `docs/synthetic-speech/README.md`.

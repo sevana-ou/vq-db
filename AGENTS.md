@@ -173,6 +173,11 @@ construction (the writer lives on the bus goroutine).
   🤖 chip and a per-party table; `Stream.synthetic_speech` lands in the
   `synthetic_score` / `synthetic_speech_s` report columns. Alarm counters
   `agent_calls` and `synthetic_streams` (rule key `score`) measure them.
+- `internal/api/mix.go` — the call recording (`GET /call_audio`): the stored audio
+  chunks of a call's streams placed on one timeline by their capture timestamps
+  (vq-core stores the stream start in every chunk, so a chunk is placed by its
+  end), reduced to 16 kHz and mixed, mono or one party per channel. The call
+  page plays it; nothing is stored for it.
 - `internal/alarm/` — threshold alarms (the `alarm:` list, documented in
   `docs/vq_db_api.md` "Alarms"): `rule.go` validates a rule and holds the
   counters' default direction; `source.go` measures a rule from SQLite every
