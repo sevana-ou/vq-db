@@ -457,6 +457,11 @@ func TestSipCallsFilter(t *testing.T) {
 		{`network_mos >= 4 && code == 200 && duration >= 20000`, true},
 		{`status == "failed" || code >= 400`, false},
 		{`call_id == "c1"`, true},
+		{`agent_score >= 0.7`, true}, // a party scored 0.92
+		{`agent_score < 0.5`, false},
+		{`synthetic_score >= 0.5`, false}, // no synthetic score: matches nothing
+		{`synthetic_score < 0.5`, false},
+		{`agent_score >= 0.7 || synthetic_score >= 0.5`, true},
 	}
 	for _, c := range cases {
 		code, body := get(t, app, "/ui/sip-calls?q="+url.QueryEscape(c.expr), nil)
@@ -543,6 +548,9 @@ func TestAgentChipAndSyntheticScore(t *testing.T) {
 	app := seededApp(t)
 	if code, body := get(t, app, "/ui/sip-calls", nil); code != 200 || !strings.Contains(body, "🤖 Agent 0.92") {
 		t.Errorf("sip calls: code %d, agent chip present: %v", code, strings.Contains(body, "🤖 Agent 0.92"))
+	}
+	if _, body := get(t, app, "/ui/sip-calls", nil); !strings.Contains(body, "Voice agents</a>") || strings.Contains(body, "🤖 Synthetic voice") {
+		t.Error("sip calls: no Voice agents button, or a synthetic chip without a score")
 	}
 	// The seeded stream has no synthetic score: no row for it on the stream page.
 	if _, body := get(t, app, "/ui/stream/lnk-1", nil); strings.Contains(body, "Synthetic speech score") {

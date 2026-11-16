@@ -7,6 +7,8 @@
     <input class="grow" type="text" name="q" value="{{.Data.Filter}}"
            placeholder="Filter (e.g. callee ~ &#34;9070000205&#34; &amp;&amp; {{if .Data.Sevana}}sevana_mos{{else}}network_mos{{end}} &lt; 3.8)">
     <button type="submit" class="primary">Apply</button>
+    <a class="btn" href="{{.Base}}/ui/sip-calls?q={{queryEsc .Data.AgentFilter}}"
+       title="Calls with an Agent or Synthetic voice mark: {{.Data.AgentFilter}}">🤖 Voice agents</a>
     {{if .Data.Filter}}<a class="btn" href="{{.Base}}/ui/sip-calls">Reset</a>{{end}}
   </form>
   <div id="table" hx-get="{{.SelfURL}}" hx-trigger="every 10s" hx-swap="innerHTML">
@@ -45,7 +47,8 @@
             {{- else if eq $row.outcome "failed"}}<span class="chip danger">Failed</span>
             {{- else}}<span class="chip neutral">Unknown</span>{{end}}
             {{- range $row.health}} <span class="chip warning" title="{{.Explanation}}">⚠ {{.Tag}}</span>{{end}}
-            {{- with $row.agent}} <span class="chip info" title="A party replies like an automated voice agent (turn-taking score {{.}} of 1). An unvalidated estimate.">🤖 Agent {{.}}</span>{{end}}</td>
+            {{- with $row.agent}} <span class="chip info" title="A party replies like an automated voice agent (turn-taking score {{.}} of 1). An unvalidated estimate.">🤖 Agent {{.}}</span>{{end}}
+            {{- with $row.synthetic}} <span class="chip info" title="A party's voice sounds synthetic to PVQA (synthetic speech score {{.}} of 1). An unvalidated estimate.">🤖 Synthetic voice {{.}}</span>{{end}}</td>
         <td>{{sipCode $row}}</td>
         <td>{{if $row.call_id}}<a href="{{$base}}/ui/sip-call/{{queryEsc $row.call_id}}" title="Details">↗</a>{{end}}</td>
       </tr>

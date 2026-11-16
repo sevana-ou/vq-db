@@ -280,6 +280,8 @@ The same language over one row per Call-ID (`filter.SipCallNameMap`):
 | `status` | `"established"`, `"failed"` or `"unknown"` |
 | `reinvites` | number of re-INVITE / UPDATE events |
 | `sevana_mos`, `network_mos` | worst finished RTP stream of the call; Sevana counts only streams PVQA analysed, and is 0 when none was |
+| `agent_score` | highest turn-taking score of a party (0..1); the call matches nothing when it has no score |
+| `synthetic_score` | highest synthetic speech score of a finished RTP stream (0..1); likewise |
 
 `sevana_mos == 0` means "not analysed by PVQA", for streams and calls alike (a
 stream PVQA skipped is stored with 0). So `sevana_mos < x` also matches those;
@@ -289,3 +291,4 @@ use `sevana_mos > 0 && sevana_mos < x` for analysed but poor ones.
     callee ~ "9070000205" && sevana_mos > 0 && sevana_mos < 3.8
     status == "failed" || code >= 400
     network_mos < 4 && duration > 25000
+    agent_score >= 0.7 || synthetic_score >= 0.5      # the "Voice agents" button

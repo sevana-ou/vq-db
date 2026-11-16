@@ -354,7 +354,8 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 		limit = 25
 	}
 	expr := strings.TrimSpace(q.Get("q"))
-	data := map[string]any{"Filter": expr, "Sevana": a.showSevana()}
+	data := map[string]any{"Filter": expr, "Sevana": a.showSevana(),
+		"AgentFilter": fmt.Sprintf("agent_score >= %g || synthetic_score >= %g", agentChipScore, syntheticChipScore)}
 	count, err := api.GetSipCallCount(a.deps.DB, nil, nil, "", expr)
 	if err != nil {
 		data["Error"] = err.Error()
@@ -376,7 +377,9 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 				streams := mos[rawString(row["call_id"])]
 				sevana := make([]float64, 0, len(streams))
 				network := make([]float64, 0, len(streams))
+				synthetic := 0.0
 				for _, m := range streams {
+					synthetic = max(synthetic, m.SyntheticScore)
 					if m.SevanaMos > 0 {
 						sevana = append(sevana, m.SevanaMos)
 					}
@@ -384,6 +387,10 @@ func (a *App) sipCallsPage(w http.ResponseWriter, r *http.Request) {
 				}
 				row["sevana_mos"] = worstMos(sevana, len(streams))
 				row["network_mos"] = worstMos(network, len(streams))
+				// a chip when a party's voice sounds synthetic to PVQA
+				if synthetic >= syntheticChipScore {
+					row["synthetic"] = fmt.Sprintf("%.2f", synthetic)
+				}
 			}
 		}
 		// vq-core's call-level warnings (one-way audio, asymmetries, late media,

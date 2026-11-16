@@ -20,6 +20,12 @@ var SipCallNameMap = map[string]string{
 	"reinvites":   "c.reinvite_count",
 	"sevana_mos":  "COALESCE((select min(nullif(t.sevana_mos, 0))" + callStreamsSQL + ", 0)",
 	"network_mos": "(select min(t.network_mos)" + callStreamsSQL,
+	// vq-core's voice-agent estimates, NULL (matches nothing) when the call has
+	// none: the highest turn-taking score of a party, and the highest synthetic
+	// speech score of a finished stream.
+	"agent_score": "(select max(json_extract(p.value, '$.score')) from rtpmon_turn_taking tt, json_each(tt.parties) p" +
+		" where tt.call_id = c.call_id and json_extract(p.value, '$.has_score'))",
+	"synthetic_score": "(select max(t.synthetic_score)" + callStreamsSQL,
 }
 
 // BuildSipCallWhere compiles a SIP calls filter expression into a
