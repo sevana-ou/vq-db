@@ -335,12 +335,19 @@ func silenceTip(row map[string]any) string {
 // syntheticChip is PVQA's synthetic speech score as a chip; nil when the
 // stream has no score.
 type syntheticChip struct {
-	Tone string
-	Text string
+	Tone  string
+	Text  string
+	Title string
 }
 
-func syntheticView(v any) *syntheticChip {
+// syntheticView takes the stream's score and, optionally, its provisional score,
+// which is shown (marked "~", muted) only while there is no score.
+func syntheticView(v any, provisional ...any) *syntheticChip {
 	if v == nil {
+		if len(provisional) > 0 && provisional[0] != nil {
+			return &syntheticChip{Tone: "neutral provisional", Text: fmt.Sprintf("~%.2f", toF64(provisional[0])),
+				Title: "Provisional: from less than 20 s of speech, clearly less reliable"}
+		}
 		return nil
 	}
 	score := toF64(v)

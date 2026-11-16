@@ -457,7 +457,7 @@ func reportCols(table string) string {
 		table + ".sevana_mos, " + table + ".sevana_rfactor, " + table + ".network_mos, " + table + ".jitter, " +
 		table + ".codec, " + table + ".detector_report, " + table + ".rtt_delay, " + table + ".duration_audio, " +
 		table + ".dtx_sid, " + table + ".dtx_count, " + table + ".dtx_total, " +
-		table + ".synthetic_score, " + table + ".synthetic_speech_s, " +
+		table + ".synthetic_score, " + table + ".synthetic_speech_s, " + table + ".synthetic_provisional, " +
 		"rtpmon_streams.sip_source, rtpmon_streams.sip_destination, rtpmon_streams.sip_callid, " +
 		"rtpmon_streams.src_ip, rtpmon_streams.src_port, rtpmon_streams.dst_ip, " +
 		"rtpmon_streams.dst_port, rtpmon_streams.ssrc, rtpmon_streams.link_id"

@@ -148,6 +148,10 @@ message Stream {
         uint32 utterances       = 3;   // utterances that speech is in
         float covered_seconds   = 4;   // decoded audio of the stream it covers
         string model            = 5;   // e.g. "synthetic-2026.11"
+        // An early value of the same score on less speech (from about 10 s), clearly
+        // less reliable; set only until `score` is, and only when the PVQA config asks
+        // for it (ProvisionalSpeechS).
+        optional float provisional_score = 6;
     }
     SyntheticSpeech synthetic_speech    = 21;
 }

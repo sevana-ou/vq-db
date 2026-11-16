@@ -253,18 +253,23 @@ func streamReport(msg *pb.Stream, full bool) model.StreamReport {
 	var hasSynthetic bool
 	var syntheticScore *float64
 	var syntheticSpeech float64
+	var syntheticProvisional *float64
 	if s := msg.GetSyntheticSpeech(); s != nil {
 		hasSynthetic = true
 		syntheticSpeech = round4(s.GetSpeechSeconds())
 		if s.Score != nil {
 			v := round4(s.GetScore())
 			syntheticScore = &v
+		} else if s.ProvisionalScore != nil {
+			v := round4(s.GetProvisionalScore())
+			syntheticProvisional = &v
 		}
 	}
 	return model.StreamReport{
 		HasSynthetic:         hasSynthetic,
 		SyntheticScore:       syntheticScore,
 		SyntheticSpeechS:     syntheticSpeech,
+		SyntheticProvisional: syntheticProvisional,
 		StreamID:             streamID(msg.GetStreamId()),
 		StartMs:              int64(msg.GetStartTimestamp()),
 		EndMs:                int64(msg.GetFinishTimestamp()),

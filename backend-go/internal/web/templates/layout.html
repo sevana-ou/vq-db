@@ -52,7 +52,7 @@
 
 {{define "mos-pill"}}{{if .}}<span class="mos {{.Band}}" title="{{.Label}}"><span class="mos-dot"></span>{{.Text}}</span>{{end}}{{end}}
 
-{{define "synthetic-score"}}{{with synth .}}<span class="chip {{.Tone}}">{{.Text}}</span>{{else}}<span class="muted">—</span>{{end}}{{end}}
+{{define "synthetic-score"}}{{with synth .synthetic_score .synthetic_provisional_score}}<span class="chip {{.Tone}}"{{if .Title}} title="{{.Title}}"{{end}}>{{.Text}}</span>{{else}}<span class="muted">—</span>{{end}}{{end}}
 
 {{define "pager"}}
 <div class="pager">

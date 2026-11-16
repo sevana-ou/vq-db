@@ -233,6 +233,16 @@ func TestSyntheticSpeech(t *testing.T) {
 	if !early.HasSynthetic || early.SyntheticScore != nil || early.SyntheticSpeechS != 3 {
 		t.Errorf("too little speech: %+v", early)
 	}
+	prov := float32(0.31)
+	p := streamReport(&pb.Stream{SyntheticSpeech: &pb.Stream_SyntheticSpeech{ProvisionalScore: &prov, SpeechSeconds: 12}}, false)
+	if p.SyntheticScore != nil || p.SyntheticProvisional == nil || *p.SyntheticProvisional != 0.31 {
+		t.Errorf("provisional: %+v", p)
+	}
+	// The score, once there, is the only value kept.
+	both := streamReport(&pb.Stream{SyntheticSpeech: &pb.Stream_SyntheticSpeech{Score: &score, ProvisionalScore: &prov}}, false)
+	if both.SyntheticScore == nil || both.SyntheticProvisional != nil {
+		t.Errorf("score and provisional: %+v", both)
+	}
 	if none := streamReport(&pb.Stream{}, false); none.HasSynthetic || none.SyntheticScore != nil {
 		t.Errorf("no analysis: %+v", none)
 	}

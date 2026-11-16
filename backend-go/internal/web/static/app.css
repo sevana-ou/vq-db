@@ -247,3 +247,6 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 
 /* audio player a "Play" button of a table row turns into */
 audio.row-audio { height: 28px; width: 220px; vertical-align: middle; }
+
+/* a provisional synthetic speech score: not yet resting on enough speech */
+.chip.provisional { font-style: italic; opacity: 0.75; }

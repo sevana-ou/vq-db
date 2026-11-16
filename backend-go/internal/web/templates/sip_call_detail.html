@@ -60,7 +60,7 @@
           <td class="mono">{{.destination}}</td>
           {{if $.Sevana}}<td>{{template "mos-pill" (mos .sevana_mos true)}}</td>{{end}}
           <td>{{template "mos-pill" (mos .network_mos false)}}</td>
-          <td>{{template "synthetic-score" .synthetic_score}}</td>
+          <td>{{template "synthetic-score" .}}</td>
           {{else}}
           <td><span class="muted">no stream record</span></td><td></td>
           <td class="mono">{{.Party.Source}}</td><td class="mono">{{.Party.Destination}}</td>

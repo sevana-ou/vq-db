@@ -36,7 +36,7 @@
     {{if $sev}}<dt>Sevana Rfactor</dt><dd>{{.Rfactor}}</dd>{{end}}
     {{if isSet $d.synthetic_speech_s}}
     <dt title="PVQA's likelihood that the speech in this stream is synthetic (0..1). An uncalibrated cue for trends, not a verdict on one stream.">Synthetic speech score</dt>
-    <dd>{{template "synthetic-score" $d.synthetic_score}} <span class="muted">from {{fmtF2 $d.synthetic_speech_s}} s of speech{{if not (isSet $d.synthetic_score)}}; a score needs about 20 s{{end}}</span></dd>
+    <dd>{{template "synthetic-score" $d}} <span class="muted">from {{fmtF2 $d.synthetic_speech_s}} s of speech{{if not (isSet $d.synthetic_score)}}{{if isSet $d.synthetic_provisional_score}}; provisional, a regular score needs about 20 s{{else}}; a score needs about 20 s{{end}}{{end}}</span></dd>
     {{end}}
     <dt>SIP callid</dt><dd>{{if $d.sip_callid}}<a href="{{$base}}/ui/sip-call/{{queryEsc $d.sip_callid}}">{{$d.sip_callid}} ↗</a>{{end}}</dd>
     <dt>SIP destination</dt><dd>{{$d.sip_dst}}</dd>

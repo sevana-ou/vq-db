@@ -402,14 +402,15 @@ func (w *Writer) addReport(report model.StreamReport, table string) error {
 			illegal_packet_counter, lost_packet_counter, sevana_mos, sevana_rfactor,
 			network_mos, jitter, codec, detector_report, rtt_delay, flags, tags,
 			amr_nb_switch_counter, amr_wb_switch_counter, link_id, duration_audio,
-			user_report, dtx_sid, dtx_count, dtx_total, synthetic_score, synthetic_speech_s
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			user_report, dtx_sid, dtx_count, dtx_total, synthetic_score, synthetic_speech_s,
+			synthetic_provisional
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		dbID, report.StartMs, report.EndMs, report.RTPPacketCounter,
 		report.IllegalPacketCounter, report.LostPacketCounter, nullFloat(report.SevanaMOS), report.SevanaRfactor,
 		nullFloat(report.NetworkMOS), report.Jitter, report.Codec, report.DetectorReport, report.RTTDelay, flags, nil,
 		report.AmrNbSwitchCounter, report.AmrWbSwitchCounter, report.StreamID.LinkID, report.DurationAudio,
 		report.UserReport, report.DtxSid, report.DtxCount, report.DtxTotal,
-		nullFloat(report.SyntheticScore), syntheticSpeech,
+		nullFloat(report.SyntheticScore), syntheticSpeech, nullFloat(report.SyntheticProvisional),
 	)
 	return err
 }

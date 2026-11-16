@@ -2517,8 +2517,12 @@ type Stream_SyntheticSpeech struct {
 	Utterances     uint32                 `protobuf:"varint,3,opt,name=utterances,proto3" json:"utterances,omitempty"`                                // utterances that speech is in
 	CoveredSeconds float32                `protobuf:"fixed32,4,opt,name=covered_seconds,json=coveredSeconds,proto3" json:"covered_seconds,omitempty"` // decoded audio of the stream it covers
 	Model          string                 `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`                                           // e.g. "synthetic-2026.11"
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// An early value of the same score on less speech (from about 10 s), clearly
+	// less reliable; set only until `score` is, and only when the PVQA config asks
+	// for it (ProvisionalSpeechS).
+	ProvisionalScore *float32 `protobuf:"fixed32,6,opt,name=provisional_score,json=provisionalScore,proto3,oneof" json:"provisional_score,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Stream_SyntheticSpeech) Reset() {
@@ -2584,6 +2588,13 @@ func (x *Stream_SyntheticSpeech) GetModel() string {
 		return x.Model
 	}
 	return ""
+}
+
+func (x *Stream_SyntheticSpeech) GetProvisionalScore() float32 {
+	if x != nil && x.ProvisionalScore != nil {
+		return *x.ProvisionalScore
+	}
+	return 0
 }
 
 type CallHealth_Warning struct {
@@ -2838,7 +2849,7 @@ const file_capturemessage_proto_rawDesc = "" +
 	"\x19dropped_hw_packet_counter\x18\b \x01(\x04R\x16droppedHwPacketCounter\x128\n" +
 	"\x18erroneous_packet_counter\x18\t \x01(\x04R\x16erroneousPacketCounter\x129\n" +
 	"\x19mbuf_alloc_failed_counter\x18\n" +
-	" \x01(\x04R\x16mbufAllocFailedCounter\"\xbb\v\n" +
+	" \x01(\x04R\x16mbufAllocFailedCounter\"\x83\f\n" +
 	"\x06Stream\x12/\n" +
 	"\tstream_id\x18\x01 \x01(\v2\x12.messages.StreamIdR\bstreamId\x12,\n" +
 	"\x12rtp_packet_counter\x18\x02 \x01(\x04R\x10rtpPacketCounter\x12;\n" +
@@ -2876,7 +2887,7 @@ const file_capturemessage_proto_rawDesc = "" +
 	"\tcount_sid\x18\x01 \x01(\x04R\bcountSid\x12\x1b\n" +
 	"\tcount_dtx\x18\x02 \x01(\x04R\bcountDtx\x12\x1f\n" +
 	"\vcount_total\x18\x03 \x01(\x04R\n" +
-	"countTotal\x1a\xbc\x01\n" +
+	"countTotal\x1a\x84\x02\n" +
 	"\x0fSyntheticSpeech\x12\x19\n" +
 	"\x05score\x18\x01 \x01(\x02H\x00R\x05score\x88\x01\x01\x12%\n" +
 	"\x0espeech_seconds\x18\x02 \x01(\x02R\rspeechSeconds\x12\x1e\n" +
@@ -2884,8 +2895,10 @@ const file_capturemessage_proto_rawDesc = "" +
 	"utterances\x18\x03 \x01(\rR\n" +
 	"utterances\x12'\n" +
 	"\x0fcovered_seconds\x18\x04 \x01(\x02R\x0ecoveredSeconds\x12\x14\n" +
-	"\x05model\x18\x05 \x01(\tR\x05modelB\b\n" +
-	"\x06_score\">\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\x120\n" +
+	"\x11provisional_score\x18\x06 \x01(\x02H\x01R\x10provisionalScore\x88\x01\x01B\b\n" +
+	"\x06_scoreB\x14\n" +
+	"\x12_provisional_score\">\n" +
 	"\vStreamStart\x12/\n" +
 	"\tstream_id\x18\x01 \x01(\v2\x12.messages.StreamIdR\bstreamId\"i\n" +
 	"\fStreamFinish\x12/\n" +

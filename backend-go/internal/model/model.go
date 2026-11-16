@@ -65,10 +65,13 @@ type StreamReport struct {
 	HasSynthetic     bool
 	SyntheticScore   *float64
 	SyntheticSpeechS float64
-	UserReport       string
-	SipCallID        string
-	SipPeerA         string
-	SipPeerB         string
+	// The early, less reliable value vq-core sends until SyntheticScore exists
+	// (from about 10 s of speech); nil otherwise.
+	SyntheticProvisional *float64
+	UserReport           string
+	SipCallID            string
+	SipPeerA             string
+	SipPeerB             string
 }
 
 // StreamAudio is a decoded audio chunk published in-band (protobuf StreamAudio).

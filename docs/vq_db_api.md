@@ -618,8 +618,9 @@ The dashboard shows a `🤖 Agent 0.92` chip in the SIP calls list when a party 
 | -------------------- | --------------------------------------------------------------------------------------- |
 | `synthetic_score`    | 0..1, likelihood that the stream's speech is synthetic; `null` until it holds about 20 s of speech, and when vq-core did not run the analysis |
 | `synthetic_speech_s` | seconds of speech the score rests on; `null` when vq-core did not run the analysis      |
+| `synthetic_provisional_score` | an early value of the same score, from about 10 s of speech, clearly less reliable; set only while `synthetic_score` is `null`, and only when vq-core's PVQA config asks for it (`ProvisionalSpeechS`) |
 
-stored in the `synthetic_score` / `synthetic_speech_s` columns of `rtpmon_intervals` and `rtpmon_statistics`. The dashboard shows the score on the stream page and in the call page's stream table, as a `🤖` chip from 0.5.
+stored in the `synthetic_score` / `synthetic_speech_s` / `synthetic_provisional` columns of `rtpmon_intervals` and `rtpmon_statistics`. The dashboard shows the score on the stream page and in the call page's stream table, as a `🤖` chip from 0.5; a provisional value is shown as `~0.31`, muted, never as a `🤖` chip.
 
 ## Alarms
 

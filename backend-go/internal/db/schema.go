@@ -149,7 +149,8 @@ func reportTableDDL(name string) string {
 		dtx_count INTEGER,
 		dtx_total INTEGER,
 		synthetic_score FLOAT,
-		synthetic_speech_s FLOAT
+		synthetic_speech_s FLOAT,
+		synthetic_provisional FLOAT
 	)`, name)
 }
 
@@ -180,6 +181,8 @@ func migrate(conn *sql.DB) error {
 		// analysis, the score alone NULL while there is too little speech.
 		{"synthetic_score", "FLOAT"},
 		{"synthetic_speech_s", "FLOAT"},
+		// the early value on less speech, while synthetic_score is still NULL
+		{"synthetic_provisional", "FLOAT"},
 	}
 	for _, table := range []string{"rtpmon_intervals", "rtpmon_statistics"} {
 		existing, err := tableColumns(conn, table)

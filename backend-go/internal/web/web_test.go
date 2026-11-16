@@ -554,6 +554,15 @@ func TestAgentChipAndSyntheticScore(t *testing.T) {
 	if v := syntheticView(0.61); v == nil || v.Tone != "info" || v.Text != "🤖 0.61" {
 		t.Errorf("0.61: %+v", v)
 	}
+	if v := syntheticView(nil, 0.31); v == nil || v.Text != "~0.31" || !strings.Contains(v.Tone, "provisional") || v.Title == "" {
+		t.Errorf("provisional 0.31: %+v", v)
+	}
+	if v := syntheticView(0.61, 0.31); v == nil || v.Text != "🤖 0.61" {
+		t.Errorf("score beside a provisional value: %+v", v)
+	}
+	if v := syntheticView(nil, nil); v != nil {
+		t.Errorf("neither: %+v", v)
+	}
 	if v := syntheticView(0.03); v == nil || v.Tone != "neutral" || v.Text != "0.03" {
 		t.Errorf("0.03: %+v", v)
 	}

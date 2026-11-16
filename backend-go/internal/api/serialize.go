@@ -115,28 +115,29 @@ func ReportRowToJSON(r Row) map[string]any {
 	text := getStr(r, "detector_report")
 	decomp := pvqa.Decompose([]string{text})
 	return map[string]any{
-		"source":                 endpoint(getStr(r, "src_ip"), r["src_port"]),
-		"destination":            endpoint(getStr(r, "dst_ip"), r["dst_port"]),
-		"ssrc":                   hexOf(r["ssrc"]),
-		"stream_id":              getStr(r, "link_id"),
-		"codec":                  getStr(r, "codec"),
-		"sevana_mos":             getF64(r, "sevana_mos"),
-		"network_mos":            getF64(r, "network_mos"),
-		"jitter":                 round3(getF64(r, "jitter")),
-		"rtt_delay":              round3(getF64(r, "rtt_delay")),
-		"duration":               float64(durationMs) / 1000.0,
-		"rtp_packet_counter":     getI64(r, "rtp_packet_counter"),
-		"lost_packet_counter":    getI64(r, "lost_packet_counter"),
-		"illegal_packet_counter": getI64(r, "illegal_packet_counter"),
-		"sevana_rfactor":         decomp.RfactorPercents(),
-		"synthetic_score":        r["synthetic_score"],
-		"synthetic_speech_s":     r["synthetic_speech_s"],
-		"detectors":              detectorsJSON(decomp),
-		"detectors_report":       text,
-		"sip_src":                getStr(r, "sip_source"),
-		"sip_dst":                getStr(r, "sip_destination"),
-		"sip_callid":             getStr(r, "sip_callid"),
-		"json_report":            text,
+		"source":                      endpoint(getStr(r, "src_ip"), r["src_port"]),
+		"destination":                 endpoint(getStr(r, "dst_ip"), r["dst_port"]),
+		"ssrc":                        hexOf(r["ssrc"]),
+		"stream_id":                   getStr(r, "link_id"),
+		"codec":                       getStr(r, "codec"),
+		"sevana_mos":                  getF64(r, "sevana_mos"),
+		"network_mos":                 getF64(r, "network_mos"),
+		"jitter":                      round3(getF64(r, "jitter")),
+		"rtt_delay":                   round3(getF64(r, "rtt_delay")),
+		"duration":                    float64(durationMs) / 1000.0,
+		"rtp_packet_counter":          getI64(r, "rtp_packet_counter"),
+		"lost_packet_counter":         getI64(r, "lost_packet_counter"),
+		"illegal_packet_counter":      getI64(r, "illegal_packet_counter"),
+		"sevana_rfactor":              decomp.RfactorPercents(),
+		"synthetic_score":             r["synthetic_score"],
+		"synthetic_speech_s":          r["synthetic_speech_s"],
+		"synthetic_provisional_score": r["synthetic_provisional"],
+		"detectors":                   detectorsJSON(decomp),
+		"detectors_report":            text,
+		"sip_src":                     getStr(r, "sip_source"),
+		"sip_dst":                     getStr(r, "sip_destination"),
+		"sip_callid":                  getStr(r, "sip_callid"),
+		"json_report":                 text,
 	}
 }
 
@@ -205,6 +206,7 @@ func StreamHistoryToJSON(rows []Row, agentID, agentName string, final Row, silen
 		result["sevana_rfactor"] = rfactor
 		result["synthetic_score"] = s["synthetic_score"]
 		result["synthetic_speech_s"] = s["synthetic_speech_s"]
+		result["synthetic_provisional_score"] = s["synthetic_provisional"]
 		result["detectors"] = detectorsJSON(decomp)
 		result["json_report"] = getStr(s, "detector_report")
 		for k, v := range SilenceFields(s, silenceThreshold) {
@@ -232,6 +234,7 @@ func FinishedStreamRowToJSON(r Row, silenceThreshold float64) map[string]any {
 	out["sevana_rfactor"] = getI64(r, "sevana_rfactor")
 	out["synthetic_score"] = r["synthetic_score"]
 	out["synthetic_speech_s"] = r["synthetic_speech_s"]
+	out["synthetic_provisional_score"] = r["synthetic_provisional"]
 	out["source"] = endpoint(getStr(r, "src_ip"), r["src_port"])
 	out["destination"] = endpoint(getStr(r, "dst_ip"), r["dst_port"])
 	out["sip_src"] = getStr(r, "sip_source")
@@ -255,6 +258,7 @@ func ActiveRecordToJSON(r Row, silenceThreshold float64) map[string]any {
 	out["sevana_rfactor"] = getI64(r, "sevana_rfactor")
 	out["synthetic_score"] = r["synthetic_score"]
 	out["synthetic_speech_s"] = r["synthetic_speech_s"]
+	out["synthetic_provisional_score"] = r["synthetic_provisional"]
 	out["source"] = endpoint(getStr(r, "src_ip"), r["src_port"])
 	out["destination"] = endpoint(getStr(r, "dst_ip"), r["dst_port"])
 	out["sip_src"] = getStr(r, "sip_src")

@@ -277,22 +277,23 @@ func (r *ActiveStreamRegistry) recordLocked(e *entry) map[string]any {
 		"network_mos":    mosOrZero(last.NetworkMOS),
 		"sevana_rfactor": last.SevanaRfactor,
 		// nil (JSON null) until vq-core's reports carry a score
-		"synthetic_score":    syntheticScore(last),
-		"synthetic_speech_s": syntheticSpeech(last),
-		"jitter":             last.Jitter,
-		"rtt_delay":          last.RTTDelay,
-		"silence_ratio":      silenceRatio,
-		"duration":           durationMs, // ms
-		"src_ip":             sid.SrcIP,
-		"dst_ip":             sid.DstIP,
-		"src_port":           int64(sid.SrcPort),
-		"dst_port":           int64(sid.DstPort),
-		"ssrc":               decimalString(uint64(sid.SSRC)),
-		"sip_src":            last.SipPeerA,
-		"sip_dst":            last.SipPeerB,
-		"sip_callid":         last.SipCallID,
-		"instance_id":        r.agentID,
-		"instance_name":      r.agentName,
+		"synthetic_score":       syntheticScore(last),
+		"synthetic_speech_s":    syntheticSpeech(last),
+		"synthetic_provisional": syntheticProvisional(last),
+		"jitter":                last.Jitter,
+		"rtt_delay":             last.RTTDelay,
+		"silence_ratio":         silenceRatio,
+		"duration":              durationMs, // ms
+		"src_ip":                sid.SrcIP,
+		"dst_ip":                sid.DstIP,
+		"src_port":              int64(sid.SrcPort),
+		"dst_port":              int64(sid.DstPort),
+		"ssrc":                  decimalString(uint64(sid.SSRC)),
+		"sip_src":               last.SipPeerA,
+		"sip_dst":               last.SipPeerB,
+		"sip_callid":            last.SipCallID,
+		"instance_id":           r.agentID,
+		"instance_name":         r.agentName,
 		// serialization extras
 		"link_id":             sid.LinkID,
 		"duration_audio":      durationAudio,
@@ -318,4 +319,11 @@ func syntheticSpeech(r model.StreamReport) any {
 		return nil
 	}
 	return r.SyntheticSpeechS
+}
+
+func syntheticProvisional(r model.StreamReport) any {
+	if r.SyntheticProvisional == nil {
+		return nil
+	}
+	return *r.SyntheticProvisional
 }
