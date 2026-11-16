@@ -244,3 +244,6 @@ button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, #000); 
 /* ---- misc ---- */
 audio { width: 100%; max-width: 480px; display: block; }
 code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+
+/* audio player a "Play" button of a table row turns into */
+audio.row-audio { height: 28px; width: 220px; vertical-align: middle; }

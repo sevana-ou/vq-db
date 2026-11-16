@@ -610,7 +610,7 @@ Two estimates come ready-made from vq-core and are stored, returned and shown as
 }
 ```
 
-The dashboard shows a `🤖 Agent 0.92` chip in the SIP calls list when a party scores 0.7 or more, and the per-party table on the call page.
+The dashboard shows a `🤖 Agent 0.92` chip in the SIP calls list when a party scores 0.7 or more. On the call page the figures are columns of the RTP streams table, each party's on the row of the stream it sends (matched by `stream_id`, or by the addresses for a network-only stream), beside a Play button for streams with stored audio.
 
 **Synthetic speech score** (PVQA, per decoded stream; needs the `Synthetic Speech` section in vq-core's PVQA config): `/stats` rows (active and finished), `/streamhistory` and `/report` carry
 

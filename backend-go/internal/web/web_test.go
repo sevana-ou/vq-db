@@ -225,9 +225,10 @@ func TestSipCallDetailRenders(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("code %d", code)
 	}
-	for _, want := range []string{"Call summary", "Established", "Event timeline", "Related RTP streams", "/ui/stream/lnk-1",
+	for _, want := range []string{"Call summary", "Established", "Event timeline", "RTP streams", "/ui/stream/lnk-1",
 		"Call health", "⚠ One-way audio", "no return-path media",
-		"Turn taking", "🤖 0.92", "1507 ms", "340 ms", "not analysable: continuous audio", "Final result", "Synthetic speech"} {
+		"turn-taking columns", "🤖 0.92", "1507 ms", "340 ms", "not analysable: continuous audio", "Final result", "Synthetic speech",
+		"no stream record", "10.0.0.2:5060"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sip call detail missing %q", want)
 		}
@@ -555,5 +556,61 @@ func TestAgentChipAndSyntheticScore(t *testing.T) {
 	}
 	if v := syntheticView(0.03); v == nil || v.Tone != "neutral" || v.Text != "0.03" {
 		t.Errorf("0.03: %+v", v)
+	}
+}
+
+func TestCallStreamRowsJoinPartiesToStreams(t *testing.T) {
+	streams := []map[string]any{
+		{"stream_id": "aaa", "source": "10.0.0.1:4000", "destination": "10.0.0.2:5000"},
+		{"stream_id": zeroLinkID, "source": "10.0.0.2:5000", "destination": "10.0.0.1:4000"},
+		{"stream_id": "ccc", "source": "10.0.0.9:1", "destination": "10.0.0.8:2"},
+	}
+	tt := &turnTakingView{Parties: []turnTakingPartyView{
+		// a network-only stream: no usable id, found by its addresses
+		{StreamID: zeroLinkID, Source: "10.0.0.2:5000", Destination: "10.0.0.1:4000", Score: "0.90"},
+		// a decoded stream: found by id even though the addresses are missing
+		{StreamID: "aaa", Score: "0.10"},
+	}}
+	rows := buildCallStreamRows(streams, tt, map[string]bool{"aaa": true})
+	if len(rows) != 3 {
+		t.Fatalf("%d rows", len(rows))
+	}
+	if rows[0].Party == nil || rows[0].Party.Score != "0.10" || !rows[0].HasAudio {
+		t.Errorf("row 0: %+v", rows[0])
+	}
+	if rows[1].Party == nil || rows[1].Party.Score != "0.90" || rows[1].HasAudio {
+		t.Errorf("row 1: %+v", rows[1])
+	}
+	if rows[2].Party != nil {
+		t.Errorf("row 2 has a party: %+v", rows[2].Party)
+	}
+
+	// A party whose stream has no record gets a row of its own; no result, no extra rows.
+	tt.Parties = append(tt.Parties, turnTakingPartyView{Source: "not seen"})
+	if rows := buildCallStreamRows(streams, tt, nil); len(rows) != 4 || rows[3].Stream != nil || rows[3].Party == nil {
+		t.Errorf("unmatched party: %d rows", len(rows))
+	}
+	if rows := buildCallStreamRows(streams, nil, nil); len(rows) != 3 || rows[0].Party != nil {
+		t.Errorf("no turn taking: %+v", rows)
+	}
+}
+
+func TestCallPagePlayButton(t *testing.T) {
+	app := seededApp(t)
+	if _, body := get(t, app, "/ui/sip-call/c1", nil); strings.Contains(body, "data-play-audio") {
+		t.Error("Play button for a stream without audio")
+	}
+	// minimal WAV: 44-byte header + 2 samples
+	wav := append([]byte("RIFF\x28\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00\x80\x3e\x00\x00\x02\x00\x10\x00data\x04\x00\x00\x00"), 0, 0, 0, 0)
+	sid := model.MediaStreamId{SrcIP: "10.0.0.1", SrcPort: 5004, DstIP: "10.0.0.2", DstPort: 5060, SSRC: 0x1234, LinkID: "lnk-1"}
+	w := db.NewWriter(app.deps.DB, "agent_1", "First")
+	if _, err := w.OpenStream(sid); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddAudio(model.StreamAudio{StreamID: sid, Wav: wav, StartMs: 1000, FinishMs: 2000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, body := get(t, app, "/ui/sip-call/c1", nil); !strings.Contains(body, `data-play-audio="/audio?link_id=lnk-1"`) {
+		t.Error("no Play button for a stream with audio")
 	}
 }

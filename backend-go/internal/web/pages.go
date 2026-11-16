@@ -526,15 +526,25 @@ func (a *App) sipCallDetailPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var turnTaking any
+	var turnTaking *turnTakingView
 	if t, err := api.GetTurnTaking(a.deps.DB, []string{callID}); err == nil {
 		if v, ok := t[callID]; ok {
-			turnTaking = buildTurnTakingView(v)
+			view := buildTurnTakingView(v)
+			turnTaking = &view
 		}
 	}
+	linkIDs := make([]string, 0, len(streams))
+	for _, s := range streams {
+		if id := rawString(s["stream_id"]); id != "" {
+			linkIDs = append(linkIDs, id)
+		}
+	}
+	withAudio, _ := api.StreamsWithAudio(a.deps.DB, linkIDs)
+	rows := buildCallStreamRows(streams, turnTaking, withAudio)
 
 	data := map[string]any{
 		"TurnTaking": turnTaking,
+		"Rows":       rows,
 		"Health":     health,
 		"CallID":     callID,
 		"Events":     buildEventViews(evs),
@@ -717,6 +727,8 @@ const agentChipScore = 0.7
 const syntheticChipScore = 0.5
 
 type turnTakingPartyView struct {
+	StreamID      string
+	Destination   string
 	Source        string
 	HasScore      bool
 	Score         string
@@ -746,6 +758,7 @@ func buildTurnTakingView(t api.TurnTaking) turnTakingView {
 			source = "not seen"
 		}
 		pv := turnTakingPartyView{
+			StreamID: p.StreamID, Destination: p.Destination,
 			Source: source, HasScore: p.HasScore, Turns: p.Turns,
 			Speech:       fmt.Sprintf("%.1f s", float64(p.SpeechMs)/1000),
 			Backchannels: p.Backchannels, NotAnalysable: p.NotAnalysable,
@@ -764,4 +777,58 @@ func buildTurnTakingView(t api.TurnTaking) turnTakingView {
 		v.Parties = append(v.Parties, pv)
 	}
 	return v
+}
+
+// callStreamRow is one line of the call page's stream table: an RTP stream of
+// the call with the turn-taking figures of the party that sends it. Stream is
+// nil for a party whose stream has no record here; Party is nil for a stream
+// the turn-taking result does not cover.
+type callStreamRow struct {
+	Stream   map[string]any
+	Party    *turnTakingPartyView
+	HasAudio bool
+}
+
+const zeroLinkID = "00000000-0000-0000-0000-000000000000"
+
+// buildCallStreamRows joins the call's streams with the turn-taking parties:
+// by stream id when the party has a real one (decoded streams), otherwise by
+// the stream's addresses.
+func buildCallStreamRows(streams []map[string]any, t *turnTakingView, withAudio map[string]bool) []callStreamRow {
+	rows := make([]callStreamRow, 0, len(streams)+2)
+	used := map[int]bool{}
+	for _, s := range streams {
+		id := rawString(s["stream_id"])
+		row := callStreamRow{Stream: s, HasAudio: withAudio[id]}
+		if t != nil {
+			match := -1
+			for i := range t.Parties {
+				p := &t.Parties[i]
+				if used[i] {
+					continue
+				}
+				if p.StreamID != "" && p.StreamID != zeroLinkID && p.StreamID == id {
+					match = i
+					break
+				}
+				if match < 0 && p.Source == rawString(s["source"]) && p.Destination == rawString(s["destination"]) &&
+					(p.StreamID == "" || p.StreamID == zeroLinkID || id == zeroLinkID) {
+					match = i
+				}
+			}
+			if match >= 0 {
+				used[match] = true
+				row.Party = &t.Parties[match]
+			}
+		}
+		rows = append(rows, row)
+	}
+	if t != nil {
+		for i := range t.Parties {
+			if !used[i] {
+				rows = append(rows, callStreamRow{Party: &t.Parties[i]})
+			}
+		}
+	}
+	return rows
 }

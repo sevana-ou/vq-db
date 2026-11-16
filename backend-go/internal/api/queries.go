@@ -363,6 +363,28 @@ func normalizeSipRows(rows []Row) []Row {
 }
 
 // GetStreamAudioChunks returns base64-decoded WAV chunks for a stream.
+// StreamsWithAudio tells which of the given streams (link ids) have stored audio.
+func StreamsWithAudio(db *sql.DB, linkIDs []string) (map[string]bool, error) {
+	out := map[string]bool{}
+	if len(linkIDs) == 0 {
+		return out, nil
+	}
+	args := make([]any, len(linkIDs))
+	for i, id := range linkIDs {
+		args[i] = id
+	}
+	rows, err := queryRows(db, "select distinct rtpmon_streams.link_id as link_id from rtpmon_audio"+
+		" inner join rtpmon_streams on rtpmon_streams.stream_id = rtpmon_audio.stream_id"+
+		" where rtpmon_streams.link_id in (?"+strings.Repeat(",?", len(linkIDs)-1)+")", args...)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[getStr(r, "link_id")] = true
+	}
+	return out, nil
+}
+
 func GetStreamAudioChunks(db *sql.DB, linkID string) ([][]byte, error) {
 	query := "select rtpmon_audio.audio_wav from rtpmon_audio" +
 		" inner join rtpmon_streams on rtpmon_streams.stream_id = rtpmon_audio.stream_id" +
